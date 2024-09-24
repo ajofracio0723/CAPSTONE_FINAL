@@ -1,0 +1,44 @@
+{
+  "name": "authentithief-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@babel/runtime": "^7.24.4",
+    "@emotion/react": "^11.11.4",
+    "@emotion/styled": "^11.11.5",
+    "@fortawesome/fontawesome-svg-core": "^6.5.2",
+    "@fortawesome/free-solid-svg-icons": "^6.5.2",
+    "@fortawesome/react-fontawesome": "^0.2.0",
+    "bootstrap": "^5.3.3",
+    "crypto-js": "^4.2.0",
+    "cryptocurrency-icons": "^0.18.1",
+    "framer-motion": "^11.1.9",
+    "instascan": "^1.0.0",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^0.441.0",
+    "next": "^14.2.7",
+    "qrcode.react": "^3.2.0",
+    "react": "^18",
+    "react-bootstrap": "^2.10.2",
+    "react-dom": "^18",
+    "react-icons": "^5.3.0",
+    "react-native-modern-qrscanner": "^1.0.8",
+    "react-qr-code": "^2.0.12",
+    "react-qr-image": "^1.1.0",
+    "react-qr-scanner": "^1.0.0-alpha.11",
+    "react-spinners": "^0.13.8",
+    "react-tsparticles": "^2.12.2",
+    "styled-components": "^6.1.10",
+    "uuid": "^10.0.0",
+    "web3": "^4.12.1"
+  },
+  "devDependencies": {
+    "babel-plugin-styled-components": "^2.1.4"
+  }
+}
