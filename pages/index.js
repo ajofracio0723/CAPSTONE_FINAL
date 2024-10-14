@@ -9,6 +9,7 @@ import image2 from '../public/images/2.png';
 import image3 from '../public/images/3.png';
 import MoreContent from './MoreContent';
 
+
 const Home = () => {
   const router = useRouter();
   const [loaded, setLoaded] = useState(false);
@@ -22,11 +23,11 @@ const Home = () => {
   }, []);
 
   const handleAddProductClick = () => {
-    router.push('/LoginForm');
+    router.push('/add-product');
   };
 
   const handleQRScannerClick = () => {
-    router.push('/LoginForm');
+    router.push('/qrscanner');
   };
 
   const handleLearnMoreClick = () => {

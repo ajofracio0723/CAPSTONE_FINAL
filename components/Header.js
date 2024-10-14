@@ -43,7 +43,7 @@ const Header = () => {
         >
           <li className="menu-nav-item" style={{ marginBottom: '20px' }}>
             <a
-              href="/Home2"
+              href="/"
               className="menu-nav-link"
               style={{
                 display: 'flex',
