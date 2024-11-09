@@ -227,4 +227,6 @@ const footerIconStyle = {
   height: '4rem',
 };
 
+
+
 export default Home;

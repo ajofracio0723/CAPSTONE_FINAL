@@ -3,37 +3,44 @@ import { BarChart, Bar, LineChart, Line, PieChart, Pie, XAxis, YAxis, CartesianG
 
 const COLORS = ['#3498db', '#e74c3c', '#2ecc71', '#f39c12'];
 
-const AdminDashboard = () => {
+const AdminDashboard = ({ products }) => {
   const [productData, setProductData] = useState({ authentic: 0, counterfeit: 0 });
   const [userActivity, setUserActivity] = useState({ daily: 0, weekly: 0, monthly: 0 });
   const [topCounterfeitBrands, setTopCounterfeitBrands] = useState([]);
   const [timeSeriesData, setTimeSeriesData] = useState([]);
 
+  // This useEffect processes the product data passed in as props
   useEffect(() => {
-    // Mock data for prototype
-    setProductData({ authentic: 7500, counterfeit: 2500 });
-    setUserActivity({ daily: 1200, weekly: 8400, monthly: 36000 });
-    setTopCounterfeitBrands([
-      { name: 'Brand A', count: 450 },
-      { name: 'Brand B', count: 380 },
-      { name: 'Brand C', count: 320 },
-      { name: 'Brand D', count: 300 },
-      { name: 'Brand E', count: 250 },
-      { name: 'Brand F', count: 200 },
-      { name: 'Brand G', count: 180 },
-      { name: 'Brand H', count: 150 },
-      { name: 'Brand I', count: 120 },
-      { name: 'Brand J', count: 100 },
-    ]);
-    setTimeSeriesData([
-      { date: '2023-01', authentic: 500, counterfeit: 100, users: 2000 },
-      { date: '2023-02', authentic: 600, counterfeit: 150, users: 2200 },
-      { date: '2023-03', authentic: 700, counterfeit: 200, users: 2400 },
-      { date: '2023-04', authentic: 800, counterfeit: 180, users: 2600 },
-      { date: '2023-05', authentic: 900, counterfeit: 220, users: 2800 },
-      { date: '2023-06', authentic: 1000, counterfeit: 250, users: 3000 },
-    ]);
-  }, []);
+    if (products && products.length > 0) {
+      const authenticCount = products.filter(p => p.is_authentic).length;
+      const counterfeitCount = products.filter(p => !p.is_authentic).length;
+
+      // Top counterfeit brands logic
+      const brandCounts = products.reduce((acc, product) => {
+        if (!product.is_authentic) {
+          acc[product.brand] = (acc[product.brand] || 0) + 1;
+        }
+        return acc;
+      }, {});
+
+      const topBrands = Object.entries(brandCounts)
+        .sort((a, b) => b[1] - a[1])  // sort by count
+        .slice(0, 10)  // top 10
+        .map(([brand, count]) => ({ name: brand, count }));
+
+      // Mock time series data based on product registration date
+      const timeSeries = products.map(product => ({
+        date: product.registration_date.slice(0, 7),  // YYYY-MM
+        authentic: product.is_authentic ? 1 : 0,
+        counterfeit: !product.is_authentic ? 1 : 0,
+        users: Math.floor(Math.random() * 3000) + 1000, // Mocking user activity
+      }));
+
+      setProductData({ authentic: authenticCount, counterfeit: counterfeitCount });
+      setTopCounterfeitBrands(topBrands);
+      setTimeSeriesData(timeSeries);
+    }
+  }, [products]);
 
   return (
     <div style={styles.container}>

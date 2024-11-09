@@ -1,21 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'react-qr-code';
 import Header from './Header';
-import { FaBitcoin, FaEthereum, FaCube, FaPlusCircle, FaDownload } from 'react-icons/fa';
+import { FaBitcoin, FaEthereum, FaCube, FaPlusCircle, FaDownload, FaList } from 'react-icons/fa';
 import Web3 from 'web3';
+import ProductList from './ProductList';
 
 const AddProductForm = () => {
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
+  const [brand, setBrand] = useState('');
   const [uniqueIdentifier, setUniqueIdentifier] = useState('');
   const [qrCodeData, setQRCodeData] = useState('');
   const [products, setProducts] = useState([]);
+  const [registeredDateTime, setRegisteredDateTime] = useState('');
   const [web3, setWeb3] = useState(null);
   const [contract, setContract] = useState(null);
   const [account, setAccount] = useState('');
   const [activeTab, setActiveTab] = useState('addProduct');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Function to format the current date
+  const getCurrentDate = () => {
+    const now = new Date();
+    return `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear().toString().slice(-2)}`;
+  };
 
   useEffect(() => {
+    // Initialize the date field on component mount
+    setRegisteredDateTime(getCurrentDate());
+
     const initWeb3 = async () => {
       if (window.ethereum) {
         const web3Instance = new Web3(window.ethereum);
@@ -24,71 +37,16 @@ const AddProductForm = () => {
           setWeb3(web3Instance);
           const accounts = await web3Instance.eth.getAccounts();
           setAccount(accounts[0]);
-
           const contractABI = [
             {
               "inputs": [
-                {
-                  "internalType": "string",
-                  "name": "_productName",
-                  "type": "string"
-                },
-                {
-                  "internalType": "string",
-                  "name": "_description",
-                  "type": "string"
-                },
-                {
-                  "internalType": "string",
-                  "name": "_uniqueIdentifier",
-                  "type": "string"
-                }
+                { "internalType": "string", "name": "_productName", "type": "string" },
+                { "internalType": "string", "name": "_description", "type": "string" },
+                { "internalType": "string", "name": "_uniqueIdentifier", "type": "string" }
               ],
               "name": "addProduct",
               "outputs": [],
               "stateMutability": "nonpayable",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "getProductCount",
-              "outputs": [
-                {
-                  "internalType": "uint256",
-                  "name": "",
-                  "type": "uint256"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [
-                {
-                  "internalType": "uint256",
-                  "name": "_index",
-                  "type": "uint256"
-                }
-              ],
-              "name": "getProduct",
-              "outputs": [
-                {
-                  "internalType": "string",
-                  "name": "",
-                  "type": "string"
-                },
-                {
-                  "internalType": "string",
-                  "name": "",
-                  "type": "string"
-                },
-                {
-                  "internalType": "string",
-                  "name": "",
-                  "type": "string"
-                }
-              ],
-              "stateMutability": "view",
               "type": "function"
             }
           ];
@@ -105,28 +63,46 @@ const AddProductForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!productName || !description || !uniqueIdentifier) {
+    if (!productName || !description || !brand) {
       alert('Please fill in all fields');
       return;
     }
-    const newProduct = {
-      productName,
-      description,
-      uniqueIdentifier
-    };
-
+    
+    setIsSubmitting(true);
+    
     try {
-      await contract.methods.addProduct(productName, description, uniqueIdentifier)
+      const now = new Date();
+      const formattedDate = getCurrentDate();
+      setRegisteredDateTime(formattedDate);
+
+      const result = await contract.methods.addProduct(productName, description, "pending")
         .send({ from: account });
+      
+      const txHash = result.transactionHash;
+      setUniqueIdentifier(txHash);
+
+      const newProduct = {
+        name: productName,
+        brand,
+        registeredDateTime: formattedDate,
+        is_authentic: true,
+        description,
+        uniqueIdentifier: txHash
+      };
 
       const data = JSON.stringify(newProduct);
       setQRCodeData(data);
       setProducts([...products, newProduct]);
+      
       setProductName('');
       setDescription('');
-      setUniqueIdentifier('');
+      setBrand('');
+      
     } catch (error) {
       console.error("Error adding product to blockchain:", error);
+      alert('Error adding product to blockchain. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -152,20 +128,24 @@ const AddProductForm = () => {
   return (
     <div className="container-fluid" style={backgroundStyle}>
       <Header />
-
-      <div className="text-center mb-4">
-        <button 
-          className={`btn ${activeTab === 'addProduct' ? 'btn-primary' : 'btn-secondary'} mr-2`} 
-          onClick={() => setActiveTab('addProduct')}
-        >
-          Add Product
-        </button>
-        <button 
-          className={`btn ${activeTab === 'viewProducts' ? 'btn-primary' : 'btn-secondary'}`} 
-          onClick={() => setActiveTab('viewProducts')}
-        >
-          View Added Products
-        </button>
+      
+      <div className="d-flex justify-content-center mb-4">
+        <div className="btn-group" role="group" aria-label="Basic example" style={tabGroupStyle}>
+          <button
+            className={`btn ${activeTab === 'addProduct' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveTab('addProduct')}
+            style={activeTab === 'addProduct' ? activeTabStyle : tabStyle}
+          >
+            <FaPlusCircle className="me-2" /> Add Product
+          </button>
+          <button
+            className={`btn ${activeTab === 'viewProducts' ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={() => setActiveTab('viewProducts')}
+            style={activeTab === 'viewProducts' ? activeTabStyle : tabStyle}
+          >
+            <FaList className="me-2" /> View Products
+          </button>
+        </div>
       </div>
 
       {activeTab === 'addProduct' && (
@@ -173,46 +153,57 @@ const AddProductForm = () => {
           <div className="col-md-6">
             <div className="card" style={cardStyle}>
               <div className="card-body">
-                <div className="d-flex align-items-center justify-content-center mb-4">
-                  <FaBitcoin style={iconStyle} />
-                  <FaEthereum style={iconStyle} />
-                  <FaCube style={iconStyle} />
-                </div>
                 <h1 className="text-center mb-4" style={headingStyle}>
                   <FaPlusCircle style={{ marginRight: '0.5rem' }} /> Add Product
                 </h1>
                 <form onSubmit={handleSubmit}>
                   <div className="mb-3">
-                    <strong><label htmlFor="productName" className="form-label" style={labelStyle}>Product Name</label></strong>
+                    <label htmlFor="productName" className="form-label" style={labelStyle}>Product Name</label>
                     <input type="text" className="form-control" id="productName" value={productName} onChange={(e) => setProductName(e.target.value)} style={inputStyle} />
                   </div>
                   <div className="mb-3">
-                    <strong><label htmlFor="description" className="form-label" style={labelStyle}>Description</label></strong>
-                    <textarea className="form-control" id="description" value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
+                    <label htmlFor="brand" className="form-label" style={labelStyle}>Brand</label>
+                    <input type="text" className="form-control" id="brand" value={brand} onChange={(e) => setBrand(e.target.value)} style={inputStyle} />
                   </div>
                   <div className="mb-3">
-                    <strong><label htmlFor="uniqueIdentifier" className="form-label" style={labelStyle}>Unique Identifier</label></strong>
-                    <input type="text" className="form-control" id="uniqueIdentifier" value={uniqueIdentifier} onChange={(e) => setUniqueIdentifier(e.target.value)} style={inputStyle} />
+                    <label htmlFor="description" className="form-label" style={labelStyle}>Description</label>
+                    <textarea className="form-control" id="description" value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
                   </div>
-                  <div className="text-center">
-                    <button type="submit" className="btn btn-primary" style={buttonStyle}>
-                      <FaPlusCircle style={{ marginRight: '0.5rem' }} /> Add Product to Blockchain
+                  {uniqueIdentifier && (
+                  <div className="mb-3">
+                    <label className="form-label" style={labelStyle}>Transaction Hash (Unique Identifier)</label>
+                    <input 
+                      type="text" 
+                      className="form-control" 
+                      value={uniqueIdentifier} 
+                      readOnly 
+                      style={{
+                        ...inputStyle,
+                        color: '#ffffff', 
+                        fontWeight: 'bold'
+                      }} 
+                    />
+                  </div>
+                  )}
+                  <div className="mb-3">
+                    <label className="form-label" style={labelStyle}>Date Registered</label>
+                    <input type="text" className="form-control" value={registeredDateTime} readOnly style={inputStyle} />
+                  </div>
+                  <div className="d-flex justify-content-center mt-4">
+                    <button type="submit" className="btn btn-primary btn-lg" style={buttonStyle} disabled={isSubmitting}>
+                      {isSubmitting ? 'Submitting...' : 'Submit'}
                     </button>
                   </div>
                 </form>
-                {qrCodeData && (
-                  <div className="text-center mt-4">
-                    <h2 className="mb-3" style={headingStyle}>QR Code</h2>
-                    <div style={qrCodeContainerStyle}>
-                      <QRCode id="QRCode" value={qrCodeData} size={200} bgColor="#ffffff" fgColor="#000000" />
-                    </div>
-                    <button 
-                      onClick={() => downloadQRCode(qrCodeData, 'product-qr-code.png')} 
-                      className="btn btn-success mt-3"
-                      style={downloadButtonStyle}
-                    >
-                      <FaDownload style={{ marginRight: '0.5rem' }} /> Download QR Code
-                    </button>
+                
+                {uniqueIdentifier && (
+                  <div className="mt-4 text-center">
+                    <QRCode value={qrCodeData} size={256} id="QRCode" />
+                    <p className="text-center mt-3">
+                      <button className="btn btn-success btn-sm" onClick={() => downloadQRCode(qrCodeData, `${productName || 'QRCode'}.png`)} style={downloadButtonStyle}>
+                        <FaDownload /> Download QR Code
+                      </button>
+                    </p>
                   </div>
                 )}
               </div>
@@ -220,42 +211,12 @@ const AddProductForm = () => {
           </div>
         </div>
       )}
-
-      {activeTab === 'viewProducts' && (
-        <div className="row mt-4">
-          <div className="col">
-            <h2 className="text-center mb-4" style={headingStyle}>Added Products</h2>
-            <div style={tableContainerStyle}>
-              <table style={tableStyle}>
-                <thead>
-                  <tr>
-                    <th style={thStyle}>Product Name</th>
-                    <th style={thStyle}>Description</th>
-                    <th style={thStyle}>Unique Identifier</th>
-                    <th style={thStyle}>QR Code</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((product, index) => (
-                    <tr key={index} style={index % 2 === 0 ? trEvenStyle : trOddStyle}>
-                      <td style={tdStyle}>{product.productName}</td>
-                      <td style={tdStyle}>{product.description}</td>
-                      <td style={tdStyle}>{product.uniqueIdentifier}</td>
-                      <td style={tdStyle}>
-                        <QRCode value={JSON.stringify(product)} size={64} bgColor="#ffffff" fgColor="#000000" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeTab === 'viewProducts' && <ProductList products={products} />}
     </div>
   );
 };
 
+// Existing styles remain the same
 const backgroundStyle = {
   background: 'radial-gradient(circle, #1a0938, #000000)',
   minHeight: '100vh',
@@ -263,6 +224,32 @@ const backgroundStyle = {
   paddingTop: '20px',
 };
 
+// New styles for tabs
+const tabGroupStyle = {
+  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  padding: '0.5rem',
+  borderRadius: '50px',
+  boxShadow: '0 0 20px rgba(138, 43, 226, 0.2)',
+};
+
+const tabStyle = {
+  padding: '0.8rem 2rem',
+  margin: '0 0.5rem',
+  borderRadius: '25px',
+  transition: 'all 0.3s ease',
+  border: '1px solid rgba(138, 43, 226, 0.3)',
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  color: '#fff',
+};
+
+const activeTabStyle = {
+  ...tabStyle,
+  backgroundColor: 'rgba(138, 43, 226, 0.5)',
+  boxShadow: '0 0 15px rgba(138, 43, 226, 0.3)',
+  border: '1px solid rgba(138, 43, 226, 0.5)',
+};
+
+// Rest of the existing styles
 const cardStyle = {
   backgroundColor: 'rgba(0, 0, 0, 0.5)',
   borderRadius: '15px',
@@ -326,51 +313,6 @@ const qrCodeContainerStyle = {
   borderRadius: '10px',
   display: 'inline-block',
   marginBottom: '1rem',
-};
-
-const tableContainerStyle = {
-  maxHeight: '400px',
-  overflowY: 'auto',
-  borderRadius: '15px',
-  boxShadow: '0 0 30px rgba(138, 43, 226, 0.3)',
-  width: '100%', // Ensures the table takes full width
-  maxWidth: '800px', // Limits the maximum width of the table
-  margin: '0 auto', // Centers the table horizontally
-};
-
-const tableStyle = {
-  width: '100%', // Full width of the container
-  borderCollapse: 'separate',
-  borderSpacing: '0 0.5rem',
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  color: '#fff',
-};
-
-const thStyle = {
-  padding: '1rem',
-  textAlign: 'left',
-  backgroundColor: 'rgba(138, 43, 226, 0.3)',
-  fontWeight: 'bold',
-  textTransform: 'uppercase',
-  borderBottom: '2px solid rgba(138, 43, 226, 0.5)',
-  whiteSpace: 'nowrap', // Prevents text wrapping for headers
-  width: '25%', // Adjusts the width of each column
-};
-
-const tdStyle = {
-  padding: '1rem',
-  textAlign: 'left',
-  borderBottom: '1px solid rgba(138, 43, 226, 0.2)',
-  whiteSpace: 'nowrap', // Prevents text wrapping for table data
-  verticalAlign: 'middle',
-};
-
-const trEvenStyle = {
-  backgroundColor: 'rgba(0, 0, 0, 0.3)',
-};
-
-const trOddStyle = {
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
 };
 
 export default AddProductForm;

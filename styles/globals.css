@@ -105,3 +105,120 @@ a {
     color-scheme: dark;
   }
 }
+.productContainer {
+  background: radial-gradient(circle, #1a0938, #000000);
+  min-height: 100vh;
+  color: #fff;
+  padding-top: 20px;
+}
+
+.productCard {
+  background-color: rgba(0, 0, 0, 0.5);
+  border-radius: 15px;
+  box-shadow: 0 0 30px rgba(138, 43, 226, 0.3);
+  border: 1px solid rgba(138, 43, 226, 0.2);
+  padding: 2rem;
+}
+
+.productHeading {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(138, 43, 226, 0.5);
+  font-weight: bold;
+}
+
+.productLabel {
+  color: #fff;
+  text-shadow: 0 0 5px rgba(138, 43, 226, 0.3);
+  font-weight: bold;
+}
+
+.productInput {
+  padding: 0.8rem;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(138, 43, 226, 0.3);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  width: 100%;
+  transition: all 0.3s ease;
+}
+
+.productInput:focus {
+  outline: none;
+  box-shadow: 0 0 10px rgba(138, 43, 226, 0.5);
+  border-color: rgba(138, 43, 226, 0.8);
+}
+
+.productButton {
+  padding: 0.8rem 2.5rem;
+  font-size: 1.1rem;
+  background-color: #8a2be2;
+  border-radius: 20px;
+  color: #fff;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: auto;
+  border: none;
+}
+
+.productButton:hover {
+  background-color: #9f3fff;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(138, 43, 226, 0.3);
+}
+
+.downloadButton {
+  padding: 0.8rem 2.5rem;
+  font-size: 1.1rem;
+  background-color: #28a745;
+  border-radius: 20px;
+  color: #fff;
+  font-weight: bold;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+}
+
+.downloadButton:hover {
+  background-color: #2fc751;
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+}
+
+.qrCodeContainer {
+  display: flex;
+  justify-content: center;
+}
+
+.cryptoIcon {
+  font-size: 3rem;
+  color: #8a2be2;
+  margin-right: 1rem;
+}
+
+.tabButton {
+  margin: 0 0.5rem;
+}
+
+.tabButtonActive {
+  background-color: #8a2be2;
+  border-color: #8a2be2;
+}
+
+.tabButton:not(.tabButtonActive) {
+  background-color: transparent;
+  border-color: #8a2be2;
+  color: #8a2be2;
+}
+
+.tabButton:not(.tabButtonActive):hover {
+  background-color: rgba(138, 43, 226, 0.1);
+}
