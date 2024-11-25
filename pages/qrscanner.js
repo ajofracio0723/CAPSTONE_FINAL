@@ -12,6 +12,7 @@ const QRScanner = () => {
   const [showInvalidAlert, setShowInvalidAlert] = useState(false);
   const [isScanning, setIsScanning] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const isProcessingRef = useRef(false);
@@ -31,7 +32,6 @@ const QRScanner = () => {
     setIsLoading(true);
     setShowSuccessAlert(true);
     
-    // Add a minimum loading time of 1.5 seconds for better UX
     setTimeout(() => {
       router.push(
         `/product-status?name=${productDetails.name}&brand=${productDetails.brand}&uniqueIdentifier=${productDetails.uniqueIdentifier}&registeredDateTime=${productDetails.registeredDateTime}&isReAuthenticated=${productDetails.isReAuthenticated}`
@@ -150,13 +150,16 @@ const QRScanner = () => {
 
     const startVideoStream = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
+        const constraints = {
           video: {
-            facingMode: 'environment',
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-          },
-        });
+            facingMode: { ideal: 'environment' },
+            width: { ideal: window.innerWidth, max: 1920 },
+            height: { ideal: window.innerHeight, max: 1080 },
+            aspectRatio: { ideal: window.innerWidth / window.innerHeight }
+          }
+        };
+
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
         video.srcObject = stream;
         
@@ -173,12 +176,24 @@ const QRScanner = () => {
         });
       } catch (err) {
         console.error('Error accessing camera:', err);
+        setCameraError('Could not access camera. Please check permissions.');
       }
     };
 
     startVideoStream();
 
+    const handleResize = () => {
+      if (videoRef.current) {
+        videoRef.current.style.maxWidth = '100%';
+        videoRef.current.style.height = 'auto';
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
     return () => {
+      window.removeEventListener('resize', handleResize);
+      
       if (video.srcObject) {
         video.srcObject.getTracks().forEach(track => track.stop());
       }
@@ -189,37 +204,73 @@ const QRScanner = () => {
   }, [processQRCode, isScanning]);
 
   return (
-    <div className="container-fluid" style={{ ...containerStyle, paddingTop: '50px' }}>
+    <div 
+      className="container-fluid" 
+      style={{ 
+        ...containerStyle, 
+        paddingTop: '5vh', 
+        padding: '15px',  
+        height: '100vh',
+        overflow: 'hidden'
+      }}
+    >
       <Header />
-      <div className="row justify-content-center">
-        <div className="col-md-6">
-          <div className="card" style={cardStyle}>
+      <div className="row justify-content-center" style={{ height: '100%' }}>
+        <div className="col-12 col-md-8 col-lg-6" style={{ maxWidth: '500px', width: '100%' }}>
+          <div className="card" style={{
+            ...cardStyle, 
+            padding: '1rem',  
+            marginBottom: '1rem'
+          }}>
             <div className="card-body">
-              <div className="d-flex align-items-center justify-content-center mb-4">
+              <div className="d-flex align-items-center justify-content-center mb-3">
                 <FaBitcoin style={cryptoIconStyle} />
                 <FaEthereum style={cryptoIconStyle} />
                 <FaCube style={cryptoIconStyle} />
               </div>
-              <h2 className="text-center mb-4" style={authentithiefTitleStyle}>AUTHENTITHIEF</h2>
-              <h1 className="text-center mb-4" style={titleStyle}>
+              <h2 style={{...authentithiefTitleStyle, fontSize: '2.5rem'}}>AUTHENTITHIEF</h2>
+              <h1 style={{...titleStyle, fontSize: '2rem'}}>
                 <FaCamera style={{ marginRight: '0.5rem' }} />
                 QR Code Scanner
               </h1>
-              <div className="scanner-container" style={scannerContainerStyle}>
+              
+              {cameraError && (
+                <Alert variant="danger" className="text-center">
+                  {cameraError}
+                </Alert>
+              )}
+
+              <div 
+                className="scanner-container" 
+                style={{
+                  ...scannerContainerStyle, 
+                  height: 'auto', 
+                  maxHeight: '50vh'
+                }}
+              >
                 {isLoading ? (
-                  <div className="loading-overlay" style={loadingOverlayStyle}>
+                  <div style={loadingOverlayStyle}>
                     <Loader2 className="animate-spin" size={48} />
                     <p className="mt-3">Processing QR Code...</p>
                   </div>
                 ) : (
-                  <video ref={videoRef} style={videoStyle} />
+                  <video 
+                    ref={videoRef} 
+                    style={{
+                      ...videoStyle, 
+                      maxWidth: '100%', 
+                      width: '100%',
+                      objectFit: 'cover'
+                    }} 
+                    playsInline 
+                  />
                 )}
+                
                 {showSuccessAlert && !isLoading && (
                   <Alert
                     variant="success"
                     onClose={() => setShowSuccessAlert(false)}
                     dismissible
-                    className="small-alert"
                     style={alertStyle}
                   >
                     Scanning complete
@@ -230,13 +281,13 @@ const QRScanner = () => {
                     variant="danger"
                     onClose={() => setShowInvalidAlert(false)}
                     dismissible
-                    className="small-alert"
                     style={alertStyle}
                   >
                     Invalid QR code
                   </Alert>
                 )}
               </div>
+              
               <button
                 className="btn btn-primary w-100 mt-3"
                 onClick={() => fileInputRef.current.click()}
@@ -247,6 +298,7 @@ const QRScanner = () => {
               <input
                 type="file"
                 accept="image/*"
+                capture="environment"
                 ref={fileInputRef}
                 style={{ display: 'none' }}
                 onChange={handleFileInputChange}
@@ -267,24 +319,24 @@ const containerStyle = {
 
 const cardStyle = {
   backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  padding: '3rem',
+  padding: '1rem',
   borderRadius: '10px',
   boxShadow: '0 0 20px rgba(0, 0, 0, 0.3)',
 };
 
 const authentithiefTitleStyle = {
-  fontSize: '3.5rem',
+  fontSize: '2.5rem',
   fontWeight: 'bold',
-  marginBottom: '2rem',
+  marginBottom: '1rem',
   textAlign: 'center',
   textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
   color: '#f0f0f0',
 };
 
 const titleStyle = {
-  fontSize: '3rem',
+  fontSize: '2rem',
   fontWeight: 'bold',
-  marginBottom: '2rem',
+  marginBottom: '1rem',
   textAlign: 'center',
   textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
   color: '#f0f0f0',
