@@ -1,4 +1,4 @@
-// pages/add-product.js
+
 
 import React from 'react';
 import AddProductForm from '../components/AddProductForm';

@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import QRCode from 'react-qr-code';
+import React, { useState } from 'react';
+import { QRCodeCanvas } from 'qrcode.react';
 import Header from './Header';
-import { FaBitcoin, FaEthereum, FaCube, FaPlusCircle, FaDownload, FaList } from 'react-icons/fa';
-import Web3 from 'web3';
+import { FaPlusCircle, FaDownload, FaList } from 'react-icons/fa';
 import ProductList from './ProductList';
 
 const AddProductForm = () => {
@@ -10,125 +9,81 @@ const AddProductForm = () => {
   const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
   const [uniqueIdentifier, setUniqueIdentifier] = useState('');
-  const [qrCodeData, setQRCodeData] = useState('');
   const [products, setProducts] = useState([]);
   const [registeredDateTime, setRegisteredDateTime] = useState('');
-  const [web3, setWeb3] = useState(null);
-  const [contract, setContract] = useState(null);
-  const [account, setAccount] = useState('');
   const [activeTab, setActiveTab] = useState('addProduct');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [qrCodeData, setQRCodeData] = useState('');
 
-  // Function to format the current date
+  // Function to get the current date
   const getCurrentDate = () => {
     const now = new Date();
-    return `${now.getDate().toString().padStart(2, '0')}/${(now.getMonth() + 1).toString().padStart(2, '0')}/${now.getFullYear().toString().slice(-2)}`;
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const year = now.getFullYear().toString();
+    return `${month}/${day}/${year}`;
   };
 
-  useEffect(() => {
-    // Initialize the date field on component mount
-    setRegisteredDateTime(getCurrentDate());
-
-    const initWeb3 = async () => {
-      if (window.ethereum) {
-        const web3Instance = new Web3(window.ethereum);
-        try {
-          await window.ethereum.enable();
-          setWeb3(web3Instance);
-          const accounts = await web3Instance.eth.getAccounts();
-          setAccount(accounts[0]);
-          const contractABI = [
-            {
-              "inputs": [
-                { "internalType": "string", "name": "_productName", "type": "string" },
-                { "internalType": "string", "name": "_description", "type": "string" },
-                { "internalType": "string", "name": "_uniqueIdentifier", "type": "string" }
-              ],
-              "name": "addProduct",
-              "outputs": [],
-              "stateMutability": "nonpayable",
-              "type": "function"
-            }
-          ];
-          const contractAddress = '0xeec8431D7F34f1e571C96C3A0f18c81b5498F129';
-          const contractInstance = new web3Instance.eth.Contract(contractABI, contractAddress);
-          setContract(contractInstance);
-        } catch (error) {
-          console.error("User denied account access");
-        }
-      }
-    };
-    initWeb3();
-  }, []);
-
-  const handleSubmit = async (e) => {
+  // Handle form submission
+  const handleSubmit = (e) => {
     e.preventDefault();
     if (!productName || !description || !brand) {
       alert('Please fill in all fields');
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     try {
-      const now = new Date();
       const formattedDate = getCurrentDate();
       setRegisteredDateTime(formattedDate);
 
-      const result = await contract.methods.addProduct(productName, description, "pending")
-        .send({ from: account });
-      
-      const txHash = result.transactionHash;
+      // Generate a unique identifier (e.g., transaction hash)
+      const txHash = `tx_${Date.now()}`;
       setUniqueIdentifier(txHash);
 
+      // Create a new product object
       const newProduct = {
         name: productName,
         brand,
         registeredDateTime: formattedDate,
         is_authentic: true,
         description,
-        uniqueIdentifier: txHash
+        uniqueIdentifier: txHash,
+        registration_date: new Date().toISOString(),
       };
 
-      const data = JSON.stringify(newProduct);
-      setQRCodeData(data);
-      setProducts([...products, newProduct]);
-      
+      // Update products list
+      const updatedProducts = [...products, newProduct];
+      setProducts(updatedProducts);
+
+      // Generate QR code data
+      setQRCodeData(JSON.stringify(newProduct));
+
+      // Reset form fields
       setProductName('');
       setDescription('');
       setBrand('');
-      
     } catch (error) {
-      console.error("Error adding product to blockchain:", error);
-      alert('Error adding product to blockchain. Please try again.');
+      console.error('Error adding product:', error);
+      alert('Error adding product. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const downloadQRCode = (data, fileName) => {
-    const svg = document.getElementById('QRCode');
-    const svgData = new XMLSerializer().serializeToString(svg);
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = img.width;
-      canvas.height = img.height;
-      ctx.drawImage(img, 0, 0);
-      const pngFile = canvas.toDataURL("image/png");
-      const downloadLink = document.createElement("a");
-      downloadLink.download = fileName;
-      downloadLink.href = pngFile;
-      downloadLink.click();
-    };
-    img.src = "data:image/svg+xml;base64," + btoa(svgData);
+  // Function to download the QR code as an image
+  const downloadQRCode = () => {
+    const canvas = document.querySelector('canvas'); // Get the canvas element
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = `${productName || 'QRCode'}.png`;
+    link.click();
   };
 
   return (
     <div className="container-fluid" style={backgroundStyle}>
       <Header />
-      
       <div className="d-flex justify-content-center mb-4">
         <div className="btn-group" role="group" aria-label="Basic example" style={tabGroupStyle}>
           <button
@@ -170,20 +125,16 @@ const AddProductForm = () => {
                     <textarea className="form-control" id="description" value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
                   </div>
                   {uniqueIdentifier && (
-                  <div className="mb-3">
-                    <label className="form-label" style={labelStyle}>Transaction Hash (Unique Identifier)</label>
-                    <input 
-                      type="text" 
-                      className="form-control" 
-                      value={uniqueIdentifier} 
-                      readOnly 
-                      style={{
-                        ...inputStyle,
-                        color: '#ffffff', 
-                        fontWeight: 'bold'
-                      }} 
-                    />
-                  </div>
+                    <div className="mb-3">
+                      <label className="form-label" style={labelStyle}>Unique Identifier (Transaction Hash)</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={uniqueIdentifier}
+                        readOnly
+                        style={{ ...inputStyle, color: '#ffffff', fontWeight: 'bold' }}
+                      />
+                    </div>
                   )}
                   <div className="mb-3">
                     <label className="form-label" style={labelStyle}>Date Registered</label>
@@ -195,12 +146,20 @@ const AddProductForm = () => {
                     </button>
                   </div>
                 </form>
-                
-                {uniqueIdentifier && (
+
+                {qrCodeData && (
                   <div className="mt-4 text-center">
-                    <QRCode value={qrCodeData} size={256} id="QRCode" />
+                    <QRCodeCanvas
+                      value={qrCodeData}
+                      size={300}
+                      bgColor="#FFFFFF"
+                      fgColor="#000000"
+                      level="H"
+                      includeMargin={true}
+                      style={{ marginBottom: '1rem' }}
+                    />
                     <p className="text-center mt-3">
-                      <button className="btn btn-success btn-sm" onClick={() => downloadQRCode(qrCodeData, `${productName || 'QRCode'}.png`)} style={downloadButtonStyle}>
+                      <button className="btn btn-success btn-sm" onClick={downloadQRCode} style={downloadButtonStyle}>
                         <FaDownload /> Download QR Code
                       </button>
                     </p>
@@ -216,7 +175,6 @@ const AddProductForm = () => {
   );
 };
 
-// Existing styles remain the same
 const backgroundStyle = {
   background: 'radial-gradient(circle, #1a0938, #000000)',
   minHeight: '100vh',
@@ -224,7 +182,6 @@ const backgroundStyle = {
   paddingTop: '20px',
 };
 
-// New styles for tabs
 const tabGroupStyle = {
   backgroundColor: 'rgba(0, 0, 0, 0.3)',
   padding: '0.5rem',
@@ -249,7 +206,6 @@ const activeTabStyle = {
   border: '1px solid rgba(138, 43, 226, 0.5)',
 };
 
-// Rest of the existing styles
 const cardStyle = {
   backgroundColor: 'rgba(0, 0, 0, 0.5)',
   borderRadius: '15px',
@@ -299,20 +255,6 @@ const buttonStyle = {
 const downloadButtonStyle = {
   ...buttonStyle,
   backgroundImage: 'linear-gradient(to right, #4a00e0, #8e2de2)',
-};
-
-const iconStyle = {
-  fontSize: '2.5rem',
-  color: '#8a2be2',
-  margin: '0 1rem',
-};
-
-const qrCodeContainerStyle = {
-  backgroundColor: 'white',
-  padding: '1rem',
-  borderRadius: '10px',
-  display: 'inline-block',
-  marginBottom: '1rem',
 };
 
 export default AddProductForm;

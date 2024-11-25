@@ -1,230 +1,297 @@
-import React, { useState } from 'react';
-import { FaBitcoin, FaEthereum, FaCubes } from 'react-icons/fa';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/router';
-import { css } from '@emotion/react';
-import { RingLoader } from 'react-spinners';
+import Header from '../components/Header';
+import { FaBitcoin, FaEthereum, FaCube, FaCamera } from 'react-icons/fa';
+import jsQR from 'jsqr';
+import { Alert } from 'react-bootstrap';
+import { RingLoader } from 'react-spinners'; // Import RingLoader
 
-const override = css`
-  display: block;
-  margin: 0 auto;
-  border-color: red;
-`;
-
-const LoginForm = () => {
+const QRScanner = () => {
   const router = useRouter();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [isFormFilled, setIsFormFilled] = useState(false);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [scanSuccess, setScanSuccess] = useState(false);
+  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
+  const [loading, setLoading] = useState(false); // New state to handle loading
+  const videoRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const successSoundRef = useRef(null);
+  const isProcessingRef = useRef(false);
 
-  const handleSignIn = async () => {
-    if (username && password) {
-      setIsLoading(true);
-      setErrorMessage('');
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+  const processQRCode = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || isProcessingRef.current) return;
+
+    setLoading(true); // Show loading animation
+    isProcessingRef.current = true;
+
+    setTimeout(() => {
+      const canvas = document.createElement('canvas');
+      const canvasContext = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvasContext.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert',
       });
-      const data = await response.json();
-      setIsLoading(false);
-      if (data.success) {
-        setIsLoggedIn(true);
-        router.push('/Home2');
-      } else {
-        setErrorMessage('Invalid username or password.');
+
+      if (code) {
+        try {
+          const productDetails = JSON.parse(code.data);
+
+          if (!productDetails.uniqueIdentifier || !productDetails.name || !productDetails.brand) {
+            throw new Error('Invalid QR code data');
+          }
+
+          const isScannedBefore = localStorage.getItem(`scanned_${productDetails.uniqueIdentifier}`);
+
+          if (isScannedBefore) {
+            productDetails.isReAuthenticated = true;
+          } else {
+            productDetails.isReAuthenticated = false;
+            localStorage.setItem(`scanned_${productDetails.uniqueIdentifier}`, true);
+          }
+
+          successSoundRef.current.play();
+          setScanSuccess(true);
+          setTimeout(() => {
+            router.push(`/product-status?name=${productDetails.name}&brand=${productDetails.brand}&uniqueIdentifier=${productDetails.uniqueIdentifier}&registeredDateTime=${productDetails.registeredDateTime}&isReAuthenticated=${productDetails.isReAuthenticated}`);
+          }, 1000);
+        } catch (err) {
+          console.error('Invalid QR code:', err);
+          router.push('/product-status?invalid=true');
+        }
       }
-    } else {
-      setErrorMessage('Please fill in both username and password.');
-    }
-  };
 
-  const handleSignUp = () => {
-    router.push('/SignupForm');
-  };
+      setLoading(false); // Hide loading animation after processing
+      isProcessingRef.current = false;
+    }, 500);
+  }, [router]);
 
-  const handleUsernameChange = (event) => {
-    setUsername(event.target.value);
-    checkFormFilled();
-  };
+  const handleFileInputChange = useCallback(
+    (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
 
-  const handlePasswordChange = (event) => {
-    setPassword(event.target.value);
-    checkFormFilled();
-  };
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const canvasContext = canvas.getContext('2d');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          canvasContext.drawImage(img, 0, 0, img.width, img.height);
 
-  const checkFormFilled = () => {
-    setIsFormFilled(username.trim() && password.trim());
-  };
+          const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert',
+          });
+
+          if (code) {
+            try {
+              const productDetails = JSON.parse(code.data);
+
+              if (!productDetails.uniqueIdentifier || !productDetails.name || !productDetails.brand) {
+                throw new Error('Invalid QR code data');
+              }
+
+              const isScannedBefore = localStorage.getItem(`scanned_${productDetails.uniqueIdentifier}`);
+
+              if (isScannedBefore) {
+                productDetails.isReAuthenticated = true;
+              } else {
+                productDetails.isReAuthenticated = false;
+                localStorage.setItem(`scanned_${productDetails.uniqueIdentifier}`, true);
+              }
+
+              successSoundRef.current.play();
+              setScanSuccess(true);
+              setTimeout(() => {
+                router.push(`/product-status?name=${productDetails.name}&brand=${productDetails.brand}&uniqueIdentifier=${productDetails.uniqueIdentifier}&registeredDateTime=${productDetails.registeredDateTime}&isReAuthenticated=${productDetails.isReAuthenticated}`);
+              }, 1000);
+            } catch (err) {
+              console.error('Invalid QR code from uploaded image:', err);
+              router.push('/product-status?invalid=true');
+            }
+          } else {
+            console.error('No QR code detected in uploaded image.');
+            router.push('/product-status?invalid=true');
+          }
+        };
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(file);
+
+      e.target.value = null;
+    },
+    [router]
+  );
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const startVideoStream = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+          },
+        });
+
+        video.srcObject = stream;
+        video.addEventListener('loadedmetadata', () => {
+          video.play();
+          setInterval(() => {
+            processQRCode();
+          }, 500); // Process frames every 500ms
+        });
+      } catch (err) {
+        console.error('Error accessing camera:', err);
+      }
+    };
+
+    startVideoStream();
+
+    return () => {
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [processQRCode]);
 
   return (
-    <div style={loginContainerStyle}>
-      <div style={loginFormStyle}>
-        <div style={iconContainerStyle}>
-          <FaBitcoin style={iconStyle} />
-          <FaEthereum style={iconStyle} />
-          <FaCubes style={iconStyle} />
-        </div>
-        <h2 style={titleStyle}>Welcome to Authentithief</h2>
-        <p style={subtitleStyle}>Secure your account with your credentials</p>
-        <input
-          type="text"
-          placeholder="Enter your username"
-          style={inputStyle}
-          value={username}
-          onChange={handleUsernameChange}
-          required
-        />
-        <input
-          type="password"
-          placeholder="Enter your password"
-          style={inputStyle}
-          value={password}
-          onChange={handlePasswordChange}
-          required
-        />
-        <button
-          onClick={handleSignIn}
-          style={{ ...buttonStyle, ...(isFormFilled ? {} : { opacity: 0.5, pointerEvents: 'none' }) }}
-        >
-          {isLoading ? (
-            <RingLoader color={'#fff'} loading={true} css={override} size={32} />
-          ) : (
-            <span>Sign In</span>
-          )}
-        </button>
-        {errorMessage && <p style={errorMessageStyle}>{errorMessage}</p>}
-        <button onClick={handleSignUp} style={{ ...buttonStyle, backgroundImage: 'linear-gradient(to right, #4a00e0, #8e2de2)', marginTop: '1rem' }}>
-          Sign Up
-        </button>
-        {isLoggedIn && <p style={successMessageStyle}>Login successful!</p>}
-        <p style={descriptionStyle}>
-          Manage your account securely and access exclusive features.
-        </p>
-        <div style={additionalContentStyle}>
-          <p style={additionalContentTextStyle}>
-            Don't have an account? <a href="/signup" style={signupLinkStyle}>Sign up here</a>.
-          </p>
-          <p style={additionalContentTextStyle}>
-            Forgot your password? <a href="/forgot-password" style={forgotPasswordLinkStyle}>Reset it here</a>.
-          </p>
+    <div className="container-fluid" style={{ ...containerStyle, paddingTop: '50px' }}>
+      <Header />
+      <div className="row justify-content-center">
+        <div className="col-md-6">
+          <div className="card" style={cardStyle}>
+            <div className="card-body">
+              <div className="d-flex align-items-center justify-content-center mb-4">
+                <FaBitcoin style={cryptoIconStyle} />
+                <FaEthereum style={cryptoIconStyle} />
+                <FaCube style={cryptoIconStyle} />
+              </div>
+              <h2 className="text-center mb-4" style={authentithiefTitleStyle}>AUTHENTITHIEF</h2>
+              <h1 className="text-center mb-4" style={titleStyle}>
+                <FaCamera style={{ marginRight: '0.5rem' }} />
+                QR Code Scanner
+              </h1>
+              <div className="scanner-container" style={scannerContainerStyle}>
+                <video ref={videoRef} style={videoStyle} />
+                {loading && (
+                  <div style={loadingOverlayStyle}>
+                    <RingLoader color="#fff" loading={loading} size={100} />
+                  </div>
+                )}
+                {showSuccessAlert && (
+                  <Alert
+                    variant="success"
+                    onClose={() => setShowSuccessAlert(false)}
+                    dismissible
+                    className="small-alert"
+                    style={{
+                      position: 'absolute',
+                      bottom: '10px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      minWidth: '200px',
+                    }}
+                  >
+                    Product is authentic
+                  </Alert>
+                )}
+              </div>
+              <button
+                className="btn btn-primary w-100 mt-3"
+                onClick={() => fileInputRef.current.click()}
+              >
+                Upload QR Code Image
+              </button>
+              <input
+                type="file"
+                accept="image/*"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleFileInputChange}
+              />
+            </div>
+          </div>
         </div>
       </div>
+      <audio ref={successSoundRef} src="/1.mp3" />
     </div>
   );
 };
 
-const loginContainerStyle = {
+const loadingOverlayStyle = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  width: '100%',
+  height: '100%',
   display: 'flex',
   justifyContent: 'center',
   alignItems: 'center',
-  height: '100vh',
-  background: 'radial-gradient(circle, #1a0938, #000000)',
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  borderRadius: '10px',
+};
+
+const containerStyle = {
+  background: 'radial-gradient(circle, #330066, #000000)',
+  minHeight: '100vh',
   color: '#fff',
 };
 
-const loginFormStyle = {
+const cardStyle = {
   backgroundColor: 'rgba(0, 0, 0, 0.5)',
   padding: '3rem',
   borderRadius: '10px',
   boxShadow: '0 0 20px rgba(0, 0, 0, 0.3)',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
 };
 
-const iconContainerStyle = {
-  marginBottom: '1rem',
-};
-
-const iconStyle = {
-  fontSize: '2rem',
-  marginRight: '0.5rem',
+const authentithiefTitleStyle = {
+  fontSize: '3.5rem',
+  fontWeight: 'bold',
+  marginBottom: '2rem',
+  textAlign: 'center',
+  textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
+  color: '#f0f0f0',
 };
 
 const titleStyle = {
   fontSize: '3rem',
   fontWeight: 'bold',
-  marginBottom: '1rem',
-  textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
-};
-
-const subtitleStyle = {
-  fontSize: '1.5rem',
   marginBottom: '2rem',
-  textShadow: '0 0 5px rgba(255, 255, 255, 0.3)',
+  textAlign: 'center',
+  textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
+  color: '#f0f0f0',
 };
 
-const inputStyle = {
-  padding: '0.8rem',
-  fontSize: '1rem',
-  marginBottom: '1rem',
-  borderRadius: '5px',
-  border: 'none',
-  backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  color: '#fff',
+const scannerContainerStyle = {
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  position: 'relative',
   width: '100%',
+  maxWidth: '500px',
+  margin: '0 auto',
 };
 
-const buttonStyle = {
-  padding: '0.8rem 2.5rem',
-  fontSize: '1.1rem',
-  fontWeight: 'bold',
-  backgroundImage: 'linear-gradient(to right, #8e2de2, #4a00e0)',
+const videoStyle = {
+  width: '100%',
+  maxWidth: '100%',
+  height: 'auto',
+  borderRadius: '10px',
+};
+
+const cryptoIconStyle = {
+  fontSize: '3rem',
+  marginRight: '0.5rem',
   color: '#fff',
-  border: '2px solid #6f42c1',
-  borderRadius: '50px',
-  cursor: 'pointer',
-  marginTop: '1rem',
-  transition: 'background-color 0.3s ease',
-  boxShadow: '0 0 10px rgba(116, 79, 160, 0.5)',
 };
 
-const errorMessageStyle = {
-  color: 'red',
-  fontSize: '1rem',
-  marginTop: '1rem',
-  fontWeight: 'bold',
-};
-
-const successMessageStyle = {
-  fontSize: '1.2rem',
-  fontWeight: 'bold',
-  marginTop: '1rem',
-  color: 'green',
-};
-
-const descriptionStyle = {
-  fontSize: '1.2rem',
-  textAlign: 'center',
-  marginTop: '1rem',
-  textShadow: '0 0 5px rgba(255, 255, 255, 0.3)',
-};
-
-const additionalContentStyle = {
-  marginTop: '2rem',
-  textAlign: 'center',
-};
-
-const additionalContentTextStyle = {
-  fontSize: '1rem',
-  marginBottom: '0.5rem',
-};
-
-const signupLinkStyle = {
-  color: '#8e2de2',
-  textDecoration: 'none',
-  fontWeight: 'bold',
-  marginLeft: '0.3rem',
-};
-
-const forgotPasswordLinkStyle = {
-  color: '#4a00e0',
-  textDecoration: 'none',
-  fontWeight: 'bold',
-  marginLeft: '0.3rem',
-};
-
-export default LoginForm;
+export default QRScanner;
