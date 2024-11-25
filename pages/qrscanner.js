@@ -152,19 +152,23 @@ const QRScanner = () => {
       try {
         const constraints = {
           video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: window.innerWidth, max: 1920 },
-            height: { ideal: window.innerHeight, max: 1080 },
-            aspectRatio: { ideal: window.innerWidth / window.innerHeight }
+            facingMode: { ideal: 'environment', fallback: 'user' },
+            width: { ideal: 1280, max: 1920 },
+            height: { ideal: 720, max: 1080 }
           }
         };
-
+    
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
-
+    
+        if (stream.getTracks().length === 0) {
+          throw new Error('No video tracks available');
+        }
+    
         video.srcObject = stream;
         
         video.addEventListener('loadedmetadata', () => {
           video.play();
+          setCameraError(null);  // Clear any previous errors
           scanIntervalRef.current = setInterval(async () => {
             if (isScanning) {
               const found = await processQRCode();
@@ -175,8 +179,8 @@ const QRScanner = () => {
           }, 500);
         });
       } catch (err) {
-        console.error('Error accessing camera:', err);
-        setCameraError('Could not access camera. Please check permissions.');
+        console.error('Camera access error:', err);
+        setCameraError(`Camera access failed: ${err.message}`);
       }
     };
 
