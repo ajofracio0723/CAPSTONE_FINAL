@@ -1,80 +1,149 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import Header from './Header';
 import { FaPlusCircle, FaDownload, FaList } from 'react-icons/fa';
 import ProductList from './ProductList';
+import Web3 from 'web3';
 
 const AddProductForm = () => {
   const [productName, setProductName] = useState('');
   const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
-  const [uniqueIdentifier, setUniqueIdentifier] = useState('');
   const [products, setProducts] = useState([]);
   const [registeredDateTime, setRegisteredDateTime] = useState('');
   const [activeTab, setActiveTab] = useState('addProduct');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [qrCodeData, setQRCodeData] = useState('');
+  const [web3, setWeb3] = useState(null);
+  const [contract, setContract] = useState(null);
+  const [account, setAccount] = useState('');
+  const [registrationFee, setRegistrationFee] = useState(0.000001);
 
-  // Function to get the current date
-  const getCurrentDate = () => {
-    const now = new Date();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
-    const year = now.getFullYear().toString();
-    return `${month}/${day}/${year}`;
-  };
+  useEffect(() => {
+    const initWeb3 = async () => {
+      if (window.ethereum) {
+        const web3Instance = new Web3(window.ethereum);
+        try {
+          await window.ethereum.enable();
+          setWeb3(web3Instance);
+          const accounts = await web3Instance.eth.getAccounts();
+          setAccount(accounts[0]);
 
-  // Handle form submission
-  const handleSubmit = (e) => {
+          const contractABI = [
+            {
+              "inputs": [
+                {"internalType": "string", "name": "_productName", "type": "string"},
+                {"internalType": "string", "name": "_description", "type": "string"},
+                {"internalType": "string", "name": "_brand", "type": "string"},
+                {"internalType": "string", "name": "_uniqueIdentifier", "type": "string"}
+              ],
+              "name": "addProduct",
+              "outputs": [],
+              "stateMutability": "payable",
+              "type": "function"
+            },
+            {
+              "inputs": [{"internalType": "string", "name": "_uniqueIdentifier", "type": "string"}],
+              "name": "getProduct",
+              "outputs": [
+                {"internalType": "string", "name": "", "type": "string"},
+                {"internalType": "string", "name": "", "type": "string"},
+                {"internalType": "string", "name": "", "type": "string"},
+                {"internalType": "string", "name": "", "type": "string"},
+                {"internalType": "address", "name": "", "type": "address"},
+                {"internalType": "uint256", "name": "", "type": "uint256"}
+              ],
+              "stateMutability": "view",
+              "type": "function"
+            }
+          ];
+          const contractAddress = '0xEbaa1DAE4670aF692C553f37C49045B1DF2D4649';
+          const contractInstance = new web3Instance.eth.Contract(contractABI, contractAddress);
+          setContract(contractInstance);
+        } catch (error) {
+          console.error("Web3 initialization failed", error);
+          alert("Please install MetaMask and connect your wallet");
+        }
+      } else {
+        alert('Non-Ethereum browser detected. Please install MetaMask!');
+      }
+    };
+    initWeb3();
+  }, []);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!productName || !description || !brand) {
       alert('Please fill in all fields');
       return;
     }
-
+  
     setIsSubmitting(true);
-
+  
     try {
-      const formattedDate = getCurrentDate();
-      setRegisteredDateTime(formattedDate);
-
-      // Generate a unique identifier (e.g., transaction hash)
-      const txHash = `tx_${Date.now()}`;
-      setUniqueIdentifier(txHash);
-
-      // Create a new product object
-      const newProduct = {
-        name: productName,
-        brand,
-        registeredDateTime: formattedDate,
-        is_authentic: true,
-        description,
-        uniqueIdentifier: txHash,
-        registration_date: new Date().toISOString(),
-      };
-
-      // Update products list
-      const updatedProducts = [...products, newProduct];
-      setProducts(updatedProducts);
-
-      // Generate QR code data
-      setQRCodeData(JSON.stringify(newProduct));
-
-      // Reset form fields
-      setProductName('');
-      setDescription('');
-      setBrand('');
+      if (contract && account) {
+        const feeInWei = web3.utils.toWei(registrationFee.toString(), 'ether');
+        const temporaryIdentifier = `${productName}-${Date.now()}`; // Create a temporary identifier
+        
+        const gasEstimate = await contract.methods.addProduct(
+          productName,
+          description,
+          brand,
+          temporaryIdentifier
+        ).estimateGas({ from: account, value: feeInWei });
+  
+        const receipt = await contract.methods.addProduct(
+          productName,
+          description,
+          brand,
+          temporaryIdentifier
+        ).send({ 
+          from: account, 
+          gas: gasEstimate,
+          value: feeInWei 
+        });
+  
+        const txHash = receipt.transactionHash;
+        const formattedDate = getCurrentDate();
+        setRegisteredDateTime(formattedDate);
+  
+        const newProduct = {
+          name: productName,
+          brand,
+          registeredDateTime: formattedDate,
+          is_authentic: true,
+          description,
+          uniqueIdentifier: txHash,
+          registration_date: new Date().toISOString(),
+        };
+  
+        setProducts([...products, newProduct]);
+        setQRCodeData(JSON.stringify(newProduct));
+  
+        setProductName('');
+        setDescription('');
+        setBrand('');
+      }
     } catch (error) {
-      console.error('Error adding product:', error);
-      alert('Error adding product. Please try again.');
+      if (error.code === 4001) {
+        alert('Transaction was rejected. Please try again.');
+      } else {
+        alert('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Function to download the QR code as an image
+  const getCurrentDate = () => {
+    const now = new Date();
+    return `${now.getMonth() + 1}`.padStart(2, '0') +
+           `/${now.getDate()}`.padStart(2, '0') +
+           `/${now.getFullYear()}`;
+  };
+
   const downloadQRCode = () => {
-    const canvas = document.querySelector('canvas'); // Get the canvas element
+    const canvas = document.querySelector('canvas');
     const link = document.createElement('a');
     link.href = canvas.toDataURL('image/png');
     link.download = `${productName || 'QRCode'}.png`;
@@ -84,8 +153,13 @@ const AddProductForm = () => {
   return (
     <div className="container-fluid" style={backgroundStyle}>
       <Header />
+      {account && (
+        <div className="text-center mb-3" style={{ color: '#0f0' }}>
+          Connected Wallet: {account.substring(0, 6)}...{account.substring(account.length - 4)}
+        </div>
+      )}
       <div className="d-flex justify-content-center mb-4">
-        <div className="btn-group" role="group" aria-label="Basic example" style={tabGroupStyle}>
+        <div className="btn-group" role="group" style={tabGroupStyle}>
           <button
             className={`btn ${activeTab === 'addProduct' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('addProduct')}
@@ -124,18 +198,18 @@ const AddProductForm = () => {
                     <label htmlFor="description" className="form-label" style={labelStyle}>Description</label>
                     <textarea className="form-control" id="description" value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
                   </div>
-                  {uniqueIdentifier && (
-                    <div className="mb-3">
-                      <label className="form-label" style={labelStyle}>Unique Identifier (Transaction Hash)</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        value={uniqueIdentifier}
-                        readOnly
-                        style={{ ...inputStyle, color: '#ffffff', fontWeight: 'bold' }}
-                      />
-                    </div>
-                  )}
+                  <div className="mb-3">
+                    <label htmlFor="registrationFee" className="form-label" style={labelStyle}>Registration Fee (ETH)</label>
+                    <input 
+                      type="number" 
+                      step="0.000001" 
+                      className="form-control" 
+                      id="registrationFee" 
+                      value={registrationFee} 
+                      onChange={(e) => setRegistrationFee(parseFloat(e.target.value))} 
+                      style={inputStyle} 
+                    />
+                  </div>
                   <div className="mb-3">
                     <label className="form-label" style={labelStyle}>Date Registered</label>
                     <input type="text" className="form-control" value={registeredDateTime} readOnly style={inputStyle} />
@@ -146,31 +220,28 @@ const AddProductForm = () => {
                     </button>
                   </div>
                 </form>
-
-                {qrCodeData && (
-                  <div className="mt-4 text-center">
-                    <QRCodeCanvas
-                      value={qrCodeData}
-                      size={300}
-                      bgColor="#FFFFFF"
-                      fgColor="#000000"
-                      level="H"
-                      includeMargin={true}
-                      style={{ marginBottom: '1rem' }}
-                    />
-                    <p className="text-center mt-3">
-                      <button className="btn btn-success btn-sm" onClick={downloadQRCode} style={downloadButtonStyle}>
-                        <FaDownload /> Download QR Code
-                      </button>
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
           </div>
+
+          {qrCodeData && (
+            <div className="text-center mt-5">
+              <QRCodeCanvas value={qrCodeData} size={256} />
+              <div className="mt-3">
+                <button className="btn btn-success" onClick={downloadQRCode}>
+                  <FaDownload className="me-2" /> Download QR Code
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
-      {activeTab === 'viewProducts' && <ProductList products={products} />}
+
+      {activeTab === 'viewProducts' && (
+        <div className="mt-4">
+          <ProductList products={products} />
+        </div>
+      )}
     </div>
   );
 };
@@ -250,11 +321,6 @@ const buttonStyle = {
   marginTop: '1rem',
   transition: 'all 0.3s ease',
   boxShadow: '0 0 15px rgba(138, 43, 226, 0.5)',
-};
-
-const downloadButtonStyle = {
-  ...buttonStyle,
-  backgroundImage: 'linear-gradient(to right, #4a00e0, #8e2de2)',
 };
 
 export default AddProductForm;
