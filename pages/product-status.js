@@ -14,27 +14,16 @@ const ProductStatus = () => {
     if (Object.keys(query).length > 0) {
       if (query.invalid === 'true') {
         setAuthentic(false);
-        setMessage('The scanned QR code is not recognized. Please report a counterfeit.');
-      } else {
+        setMessage('The scanned QR code is not recognized or not found in the blockchain. Possible counterfeit.');
+      } else if (query.isAuthentic === 'true') {
         setAuthentic(true);
         setProductDetails({
           name: query.name,
           brand: query.brand,
-          uniqueIdentifier: query.uniqueIdentifier,
-          registeredDateTime: query.registeredDateTime,
-          isReAuthenticated: query.isReAuthenticated === 'true',
+          registeredDateTime: new Date(parseInt(query.registeredDateTime) * 1000).toLocaleString(),
+          owner: query.owner,
+          // Additional blockchain verification details
         });
-      }
-    } else {
-      const storedDetails = localStorage.getItem('productDetails');
-      if (storedDetails) {
-        try {
-          const details = JSON.parse(storedDetails);
-          setProductDetails(details);
-          setAuthentic(true);
-          localStorage.removeItem('productDetails');
-        } catch (error) {
-        }
       }
     }
   }, [router.query]);
@@ -46,7 +35,7 @@ const ProductStatus = () => {
         <div className="col-md-6">
           <div className="card" style={cardStyle}>
             <div className="card-body">
-              <h2 className="text-center mb-4" style={authentithiefTitleStyle}>Product Status</h2>
+              <h2 className="text-center mb-4" style={authentithiefTitleStyle}>Product Authenticity</h2>
               {authentic === null ? (
                 <div>
                   <h3 className="text-center" style={{ color: '#ff0000' }}>No Data Available</h3>
@@ -58,20 +47,13 @@ const ProductStatus = () => {
                   <p className="text-center" style={{ color: '#ff0000' }}>{message}</p>
                 </div>
               ) : productDetails ? (
-                productDetails.isReAuthenticated ? (
-                  <div>
-                    <h3 className="text-center" style={{ color: '#ff0000' }}>Re-authenticated Product</h3>
-                    <p className="text-center" style={{ color: '#ff0000' }}>This product has already been authenticated before. Please contact us for verification or report a counterfeit.</p>
-                  </div>
-                ) : (
-                  <div>
-                    <h3 className="text-center" style={{ color: '#00ff00' }}>Product is Authentic</h3>
-                    <p className="text-center" style={{ color: '#00ff00' }}>Product Name: {productDetails.name}</p>
-                    <p className="text-center" style={{ color: '#00ff00' }}>Brand: {productDetails.brand}</p>
-                    <p className="text-center" style={{ color: '#00ff00' }}>Unique Identifier: {productDetails.uniqueIdentifier}</p>
-                    <p className="text-center" style={{ color: '#00ff00' }}>Registered Date: {productDetails.registeredDateTime}</p>
-                  </div>
-                )
+                <div>
+                  <h3 className="text-center" style={{ color: '#00ff00' }}>Product is Authentic</h3>
+                  <p className="text-center" style={{ color: '#00ff00' }}>Product Name: {productDetails.name}</p>
+                  <p className="text-center" style={{ color: '#00ff00' }}>Brand: {productDetails.brand}</p>
+                  <p className="text-center" style={{ color: '#00ff00' }}>Registered Date: {productDetails.registeredDateTime}</p>
+                  <p className="text-center" style={{ color: '#00ff00' }}>Blockchain Owner: {productDetails.owner}</p>
+                </div>
               ) : (
                 <div>
                   <h3 className="text-center" style={{ color: '#ff0000' }}>Product is not authentic</h3>

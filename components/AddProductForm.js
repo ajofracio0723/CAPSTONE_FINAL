@@ -5,9 +5,54 @@ import { FaPlusCircle, FaDownload, FaList } from 'react-icons/fa';
 import ProductList from './ProductList';
 import Web3 from 'web3';
 
+const contractABI = [
+  {
+    inputs: [
+      { internalType: "string", name: "_productName", type: "string" },
+      { internalType: "string", name: "_brand", type: "string" }
+    ],
+    name: "addProduct",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function"
+  },
+  {
+    inputs: [],
+    name: "getTotalProducts",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" }
+    ],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "_start", type: "uint256" },
+      { internalType: "uint256", name: "_count", type: "uint256" }
+    ],
+    name: "getProductsPaginated",
+    outputs: [
+      {
+        components: [
+          { internalType: "string", name: "productName", type: "string" },
+          { internalType: "string", name: "brand", type: "string" },
+          { internalType: "address", name: "owner", type: "address" },
+          { internalType: "uint256", name: "registrationTimestamp", type: "uint256" }
+        ],
+        internalType: "struct ProductRegistry.Product[]",
+        name: "",
+        type: "tuple[]"
+      }
+    ],
+    stateMutability: "view",
+    type: "function"
+  }
+];
+
+const contractAddress = '0x1890E27C98637259fd9D5FEB0dAdb48b93640e99';
+
 const AddProductForm = () => {
   const [productName, setProductName] = useState('');
-  const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
   const [products, setProducts] = useState([]);
   const [registeredDateTime, setRegisteredDateTime] = useState('');
@@ -29,37 +74,9 @@ const AddProductForm = () => {
           const accounts = await web3Instance.eth.getAccounts();
           setAccount(accounts[0]);
 
-          const contractABI = [
-            {
-              "inputs": [
-                {"internalType": "string", "name": "_productName", "type": "string"},
-                {"internalType": "string", "name": "_description", "type": "string"},
-                {"internalType": "string", "name": "_brand", "type": "string"},
-                {"internalType": "string", "name": "_uniqueIdentifier", "type": "string"}
-              ],
-              "name": "addProduct",
-              "outputs": [],
-              "stateMutability": "payable",
-              "type": "function"
-            },
-            {
-              "inputs": [{"internalType": "string", "name": "_uniqueIdentifier", "type": "string"}],
-              "name": "getProduct",
-              "outputs": [
-                {"internalType": "string", "name": "", "type": "string"},
-                {"internalType": "string", "name": "", "type": "string"},
-                {"internalType": "string", "name": "", "type": "string"},
-                {"internalType": "string", "name": "", "type": "string"},
-                {"internalType": "address", "name": "", "type": "address"},
-                {"internalType": "uint256", "name": "", "type": "uint256"}
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            }
-          ];
-          const contractAddress = '0xEbaa1DAE4670aF692C553f37C49045B1DF2D4649';
           const contractInstance = new web3Instance.eth.Contract(contractABI, contractAddress);
           setContract(contractInstance);
+          await loadProducts(contractInstance);
         } catch (error) {
           console.error("Web3 initialization failed", error);
           alert("Please install MetaMask and connect your wallet");
@@ -71,63 +88,82 @@ const AddProductForm = () => {
     initWeb3();
   }, []);
 
+  const loadProducts = async (contractInstance) => {
+    try {
+      // Get total number of products
+      const totalProducts = await contractInstance.methods.getTotalProducts().call();
+  
+      // Fetch products in batches (e.g., 20 at a time)
+      const batchSize = 20;
+      const loadedProducts = [];
+  
+      for (let i = 0; i < totalProducts; i += batchSize) {
+        const batch = await contractInstance.methods.getProductsPaginated(i, batchSize).call();
+  
+        const formattedBatch = batch.map(product => ({
+          name: product.productName,
+          brand: product.brand,
+          owner: product.owner,
+          registeredDateTime: new Date(parseInt(product.registrationTimestamp) * 1000).toLocaleDateString()
+        }));
+  
+        loadedProducts.push(...formattedBatch);
+      }
+  
+      setProducts(loadedProducts);
+    } catch (error) {
+      console.error("Error loading products:", error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!productName || !description || !brand) {
-      alert('Please fill in all fields');
+    if (!productName || !brand) {
+      alert('Please fill in all required fields');
       return;
     }
-  
+
     setIsSubmitting(true);
-  
+
     try {
       if (contract && account) {
         const feeInWei = web3.utils.toWei(registrationFee.toString(), 'ether');
-        const temporaryIdentifier = `${productName}-${Date.now()}`; // Create a temporary identifier
-        
+
         const gasEstimate = await contract.methods.addProduct(
           productName,
-          description,
-          brand,
-          temporaryIdentifier
+          brand
         ).estimateGas({ from: account, value: feeInWei });
-  
+
         const receipt = await contract.methods.addProduct(
           productName,
-          description,
-          brand,
-          temporaryIdentifier
-        ).send({ 
-          from: account, 
+          brand
+        ).send({
+          from: account,
           gas: gasEstimate,
-          value: feeInWei 
+          value: feeInWei
         });
-  
-        const txHash = receipt.transactionHash;
+
         const formattedDate = getCurrentDate();
         setRegisteredDateTime(formattedDate);
-  
-        const newProduct = {
+
+        const qrData = {
           name: productName,
           brand,
-          registeredDateTime: formattedDate,
-          is_authentic: true,
-          description,
-          uniqueIdentifier: txHash,
-          registration_date: new Date().toISOString(),
+          registeredDate: formattedDate,
+          transactionHash: receipt.transactionHash,
+          contractAddress: contract.options.address
         };
-  
-        setProducts([...products, newProduct]);
-        setQRCodeData(JSON.stringify(newProduct));
-  
+
+        setQRCodeData(JSON.stringify(qrData));
+        await loadProducts(contract);
         setProductName('');
-        setDescription('');
         setBrand('');
       }
     } catch (error) {
       if (error.code === 4001) {
         alert('Transaction was rejected. Please try again.');
       } else {
+        console.error(error);
         alert('An unexpected error occurred. Please try again.');
       }
     } finally {
@@ -137,9 +173,7 @@ const AddProductForm = () => {
 
   const getCurrentDate = () => {
     const now = new Date();
-    return `${now.getMonth() + 1}`.padStart(2, '0') +
-           `/${now.getDate()}`.padStart(2, '0') +
-           `/${now.getFullYear()}`;
+    return `${now.getMonth() + 1}/${now.getDate()}/${now.getFullYear()}`;
   };
 
   const downloadQRCode = () => {
@@ -165,7 +199,7 @@ const AddProductForm = () => {
             onClick={() => setActiveTab('addProduct')}
             style={activeTab === 'addProduct' ? activeTabStyle : tabStyle}
           >
-            <FaPlusCircle className="me-2" /> Add Product
+            <FaPlusCircle className="me-2" /> Register Product
           </button>
           <button
             className={`btn ${activeTab === 'viewProducts' ? 'btn-primary' : 'btn-secondary'}`}
@@ -195,10 +229,6 @@ const AddProductForm = () => {
                     <input type="text" className="form-control" id="brand" value={brand} onChange={(e) => setBrand(e.target.value)} style={inputStyle} />
                   </div>
                   <div className="mb-3">
-                    <label htmlFor="description" className="form-label" style={labelStyle}>Description</label>
-                    <textarea className="form-control" id="description" value={description} onChange={(e) => setDescription(e.target.value)} style={inputStyle} />
-                  </div>
-                  <div className="mb-3">
                     <label htmlFor="registrationFee" className="form-label" style={labelStyle}>Registration Fee (ETH)</label>
                     <input 
                       type="number" 
@@ -216,7 +246,7 @@ const AddProductForm = () => {
                   </div>
                   <div className="d-flex justify-content-center mt-4">
                     <button type="submit" className="btn btn-primary btn-lg" style={buttonStyle} disabled={isSubmitting}>
-                      {isSubmitting ? 'Submitting...' : 'Submit'}
+                      {isSubmitting ? 'Processing...' : 'Register Product'}
                     </button>
                   </div>
                 </form>
@@ -250,14 +280,14 @@ const backgroundStyle = {
   background: 'radial-gradient(circle, #1a0938, #000000)',
   minHeight: '100vh',
   color: '#fff',
-  paddingTop: '20px',
+  paddingTop: '20px'
 };
 
 const tabGroupStyle = {
   backgroundColor: 'rgba(0, 0, 0, 0.3)',
   padding: '0.5rem',
   borderRadius: '50px',
-  boxShadow: '0 0 20px rgba(138, 43, 226, 0.2)',
+  boxShadow: '0 0 20px rgba(138, 43, 226, 0.2)'
 };
 
 const tabStyle = {
@@ -267,14 +297,14 @@ const tabStyle = {
   transition: 'all 0.3s ease',
   border: '1px solid rgba(138, 43, 226, 0.3)',
   backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  color: '#fff',
+  color: '#fff'
 };
 
 const activeTabStyle = {
   ...tabStyle,
   backgroundColor: 'rgba(138, 43, 226, 0.5)',
   boxShadow: '0 0 15px rgba(138, 43, 226, 0.3)',
-  border: '1px solid rgba(138, 43, 226, 0.5)',
+  border: '1px solid rgba(138, 43, 226, 0.5)'
 };
 
 const cardStyle = {
@@ -282,19 +312,19 @@ const cardStyle = {
   borderRadius: '15px',
   boxShadow: '0 0 30px rgba(138, 43, 226, 0.3)',
   border: '1px solid rgba(138, 43, 226, 0.2)',
-  padding: '2rem',
+  padding: '2rem'
 };
 
 const headingStyle = {
   color: '#fff',
   textShadow: '0 0 10px rgba(138, 43, 226, 0.5)',
-  fontWeight: 'bold',
+  fontWeight: 'bold'
 };
 
 const labelStyle = {
   color: '#fff',
   textShadow: '0 0 5px rgba(138, 43, 226, 0.3)',
-  fontWeight: 'bold',
+  fontWeight: 'bold'
 };
 
 const inputStyle = {
@@ -306,7 +336,7 @@ const inputStyle = {
   backgroundColor: 'rgba(255, 255, 255, 0.1)',
   color: '#fff',
   width: '100%',
-  transition: 'all 0.3s ease',
+  transition: 'all 0.3s ease'
 };
 
 const buttonStyle = {
@@ -319,8 +349,7 @@ const buttonStyle = {
   borderRadius: '50px',
   cursor: 'pointer',
   marginTop: '1rem',
-  transition: 'all 0.3s ease',
-  boxShadow: '0 0 15px rgba(138, 43, 226, 0.5)',
+  transition: 'all 0.3s ease'
 };
 
 export default AddProductForm;

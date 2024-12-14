@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Web3 from 'web3';
 import { useRouter } from 'next/router';
 import Header from '../components/Header';
 import { FaBitcoin, FaEthereum, FaCube, FaCamera } from 'react-icons/fa';
@@ -6,39 +7,183 @@ import { Loader2 } from 'lucide-react';
 import jsQR from 'jsqr';
 import { Alert } from 'react-bootstrap';
 
+// Contract details from AddProductForm
+const contractABI = [
+  {
+    inputs: [
+      { internalType: "string", name: "_productName", type: "string" },
+      { internalType: "string", name: "_brand", type: "string" }
+    ],
+    name: "addProduct",
+    outputs: [],
+    stateMutability: "payable",
+    type: "function"
+  },
+  {
+    inputs: [],
+    name: "getTotalProducts",
+    outputs: [
+      { internalType: "uint256", name: "", type: "uint256" }
+    ],
+    stateMutability: "view",
+    type: "function"
+  },
+  {
+    inputs: [
+      { internalType: "uint256", name: "_start", type: "uint256" },
+      { internalType: "uint256", name: "_count", type: "uint256" }
+    ],
+    name: "getProductsPaginated",
+    outputs: [
+      {
+        components: [
+          { internalType: "string", name: "productName", type: "string" },
+          { internalType: "string", name: "brand", type: "string" },
+          { internalType: "address", name: "owner", type: "address" },
+          { internalType: "uint256", name: "registrationTimestamp", type: "uint256" }
+        ],
+        internalType: "struct ProductRegistry.Product[]",
+        name: "",
+        type: "tuple[]"
+      }
+    ],
+    stateMutability: "view",
+    type: "function"
+  }
+];
+const contractAddress = '0x1890E27C98637259fd9D5FEB0dAdb48b93640e99';
+
 const QRScanner = () => {
   const router = useRouter();
-  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const [showInvalidAlert, setShowInvalidAlert] = useState(false);
+  const [web3, setWeb3] = useState(null);
+  const [contract, setContract] = useState(null);
+  const [account, setAccount] = useState('');
+  const [errorMessage, setErrorMessage] = useState(null);
   const [isScanning, setIsScanning] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [cameraError, setCameraError] = useState(null);
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const isProcessingRef = useRef(false);
   const scanIntervalRef = useRef(null);
   const lastValidScanRef = useRef(null);
 
-  const handleInvalidQR = useCallback((message) => {
-    if (!lastValidScanRef.current || Date.now() - lastValidScanRef.current > 3000) {
-      setShowInvalidAlert(true);
-      console.error(message);
-      lastValidScanRef.current = Date.now();
-      setTimeout(() => setShowInvalidAlert(false), 3000);
-    }
+  // Centralized Error Handling Function
+  const handleError = useCallback((message, type = 'danger') => {
+    console.error(message);
+    setErrorMessage({
+      text: message,
+      type: type
+    });
+
+    // Auto-clear error after 5 seconds
+    setTimeout(() => {
+      setErrorMessage(null);
+    }, 5000);
   }, []);
 
-  const handleRedirect = useCallback((productDetails) => {
-    setIsLoading(true);
-    setShowSuccessAlert(true);
-    
-    setTimeout(() => {
-      router.push(
-        `/product-status?name=${productDetails.name}&brand=${productDetails.brand}&uniqueIdentifier=${productDetails.uniqueIdentifier}&registeredDateTime=${productDetails.registeredDateTime}&isReAuthenticated=${productDetails.isReAuthenticated}`
-      );
-    }, 1500);
-  }, [router]);
+  // Web3 Initialization with Improved Error Handling
+  useEffect(() => {
+    const initWeb3 = async () => {
+      try {
+        if (!window.ethereum) {
+          throw new Error('No Ethereum wallet detected. Please install MetaMask.');
+        }
 
+        const web3Instance = new Web3(window.ethereum);
+        
+        try {
+          await window.ethereum.request({ method: 'eth_requestAccounts' });
+        } catch (permissionError) {
+          throw new Error('Permission to access Ethereum wallet denied.');
+        }
+
+        const accounts = await web3Instance.eth.getAccounts();
+        if (accounts.length === 0) {
+          throw new Error('No Ethereum accounts found. Please connect your wallet.');
+        }
+
+        setWeb3(web3Instance);
+        setAccount(accounts[0]);
+
+        const contractInstance = new web3Instance.eth.Contract(
+          contractABI, 
+          contractAddress
+        );
+        setContract(contractInstance);
+
+      } catch (error) {
+        handleError(error.message || 'Web3 initialization failed');
+      }
+    };
+
+    initWeb3();
+  }, [handleError]);
+
+  // Verify Product on Blockchain with More Detailed Error Handling
+  const verifyProductOnBlockchain = async (productDetails) => {
+    if (!contract || !web3) {
+      handleError('Web3 or contract not initialized');
+      return null;
+    }
+
+    try {
+      const totalProducts = await contract.methods.getTotalProducts().call();
+
+      const batchSize = 20;
+      for (let i = 0; i < totalProducts; i += batchSize) {
+        try {
+          const batch = await contract.methods.getProductsPaginated(i, batchSize).call();
+          
+          for (const product of batch) {
+            if (
+              product.productName.toLowerCase() === productDetails.name.toLowerCase() &&
+              product.brand.toLowerCase() === productDetails.brand.toLowerCase()
+            ) {
+              return {
+                isAuthentic: true,
+                owner: product.owner,
+                registrationTimestamp: product.registrationTimestamp
+              };
+            }
+          }
+        } catch (batchError) {
+          handleError(`Error fetching product batch: ${batchError.message}`, 'warning');
+        }
+      }
+
+      return { isAuthentic: false };
+    } catch (error) {
+      handleError(`Blockchain verification error: ${error.message}`);
+      return null;
+    }
+  };
+
+  // Handle Redirect after Verification
+  const handleRedirect = useCallback(async (productDetails) => {
+    setIsLoading(true);
+    
+    try {
+      // Verify product on blockchain
+      const verificationResult = await verifyProductOnBlockchain(productDetails);
+
+      if (verificationResult && verificationResult.isAuthentic) {
+        // Redirect with blockchain verification details
+        router.push(
+          `/product-status?name=${encodeURIComponent(productDetails.name)}&brand=${encodeURIComponent(productDetails.brand)}&registeredDateTime=${encodeURIComponent(verificationResult.registrationTimestamp)}&owner=${encodeURIComponent(verificationResult.owner)}&isAuthentic=true`
+        );
+      } else {
+        handleError('Product not found in blockchain registry', 'warning');
+        router.push('/product-status?invalid=true');
+      }
+    } catch (error) {
+      handleError(`Verification process failed: ${error.message}`);
+      router.push('/product-status?invalid=true');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [router, verifyProductOnBlockchain, handleError]);
+
+  // Process QR Code
   const processQRCode = useCallback(async () => {
     const video = videoRef.current;
     if (!video || isProcessingRef.current || !isScanning) return false;
@@ -61,33 +206,30 @@ const QRScanner = () => {
         try {
           const productDetails = JSON.parse(code.data);
 
-          if (!productDetails.uniqueIdentifier || !productDetails.name || !productDetails.brand) {
-            throw new Error('Invalid QR code data');
-          }
-
-          const isScannedBefore = localStorage.getItem(`scanned_${productDetails.uniqueIdentifier}`);
-          productDetails.isReAuthenticated = !!isScannedBefore;
-
-          if (!isScannedBefore) {
-            localStorage.setItem(`scanned_${productDetails.uniqueIdentifier}`, true);
+          // Validate QR code structure
+          if (!productDetails.name || 
+              !productDetails.brand || 
+              !productDetails.registeredDate) {
+            throw new Error('Invalid QR code data structure');
           }
 
           setIsScanning(false);
           handleRedirect(productDetails);
           return true;
         } catch (err) {
-          handleInvalidQR('Invalid QR code format or data.');
+          handleError('Invalid QR code format or data: ' + err.message);
         }
       }
     } catch (err) {
-      console.error('Error processing QR code:', err);
+      handleError('Error processing QR code: ' + err.message);
     } finally {
       isProcessingRef.current = false;
     }
     
     return false;
-  }, [handleRedirect, handleInvalidQR, isScanning]);
+  }, [handleRedirect, handleError, isScanning]);
 
+  // File Input Change Handler
   const handleFileInputChange = useCallback(
     async (e) => {
       const file = e.target.files[0];
@@ -120,30 +262,27 @@ const QRScanner = () => {
         if (code) {
           const productDetails = JSON.parse(code.data);
 
-          if (!productDetails.uniqueIdentifier || !productDetails.name || !productDetails.brand) {
-            throw new Error('Invalid QR code data');
-          }
-
-          const isScannedBefore = localStorage.getItem(`scanned_${productDetails.uniqueIdentifier}`);
-          productDetails.isReAuthenticated = !!isScannedBefore;
-
-          if (!isScannedBefore) {
-            localStorage.setItem(`scanned_${productDetails.uniqueIdentifier}`, true);
+          // Validate QR code structure
+          if (!productDetails.name || 
+              !productDetails.brand || 
+              !productDetails.registeredDate) {
+            throw new Error('Invalid QR code data structure');
           }
 
           handleRedirect(productDetails);
         } else {
-          handleInvalidQR('No QR code detected in the uploaded image.');
+          handleError('No QR code detected in the uploaded image.');
         }
       } catch (err) {
-        handleInvalidQR('Invalid QR code format or data.');
+        handleError('Invalid QR code format or data: ' + err.message);
       }
 
       e.target.value = null;
     },
-    [handleRedirect, handleInvalidQR]
+    [handleRedirect, handleError]
   );
 
+  // Video Stream Setup
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
@@ -154,7 +293,6 @@ const QRScanner = () => {
           video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
         };
         
-    
         const stream = await navigator.mediaDevices.getUserMedia(constraints);
     
         if (stream.getTracks().length === 0) {
@@ -165,7 +303,6 @@ const QRScanner = () => {
         
         video.addEventListener('loadedmetadata', () => {
           video.play();
-          setCameraError(null);  // Clear any previous errors
           scanIntervalRef.current = setInterval(async () => {
             if (isScanning) {
               const found = await processQRCode();
@@ -176,8 +313,7 @@ const QRScanner = () => {
           }, 500);
         });
       } catch (err) {
-        console.error('Camera access error:', err);
-        setCameraError(`Camera access failed: ${err.message}`);
+        handleError(`Camera access failed: ${err.message}`);
       }
     };
 
@@ -202,7 +338,7 @@ const QRScanner = () => {
         clearInterval(scanIntervalRef.current);
       }
     };
-  }, [processQRCode, isScanning]);
+  }, [processQRCode, isScanning, handleError]);
 
   return (
     <div 
@@ -235,12 +371,6 @@ const QRScanner = () => {
                 QR Code Scanner
               </h1>
               
-              {cameraError && (
-                <Alert variant="danger" className="text-center">
-                  {cameraError}
-                </Alert>
-              )}
-
               <div 
                 className="scanner-container" 
                 style={{
@@ -266,27 +396,6 @@ const QRScanner = () => {
                     playsInline 
                   />
                 )}
-                
-                {showSuccessAlert && !isLoading && (
-                  <Alert
-                    variant="success"
-                    onClose={() => setShowSuccessAlert(false)}
-                    dismissible
-                    style={alertStyle}
-                  >
-                    Scanning complete
-                  </Alert>
-                )}
-                {showInvalidAlert && (
-                  <Alert
-                    variant="danger"
-                    onClose={() => setShowInvalidAlert(false)}
-                    dismissible
-                    style={alertStyle}
-                  >
-                    Invalid QR code
-                  </Alert>
-                )}
               </div>
               
               <button
@@ -308,6 +417,25 @@ const QRScanner = () => {
           </div>
         </div>
       </div>
+
+      {/* Centralized Error Alert */}
+      {errorMessage && (
+        <Alert 
+          variant={errorMessage.type} 
+          onClose={() => setErrorMessage(null)} 
+          dismissible
+          style={{
+            position: 'fixed', 
+            top: '10px', 
+            left: '50%', 
+            transform: 'translateX(-50%)', 
+            zIndex: 1000,
+            maxWidth: '90%'
+          }}
+        >
+          {errorMessage.text}
+        </Alert>
+      )}
     </div>
   );
 };

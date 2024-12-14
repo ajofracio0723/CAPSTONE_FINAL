@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { FaCheck, FaTimes } from 'react-icons/fa';
-import { QRCodeCanvas } from 'qrcode.react'; // Import from qrcode.react
+import { FaCheck } from 'react-icons/fa';
+import { QRCodeCanvas } from 'qrcode.react';
 
 const ProductList = ({ products }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,7 +18,6 @@ const ProductList = ({ products }) => {
     });
   };
 
-  // Use useMemo to memoize the filtered and sorted product list
   const filteredProducts = useMemo(() => {
     const filtered = products.filter((product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -29,7 +28,7 @@ const ProductList = ({ products }) => {
       if (sortOption === 'alphabetical') {
         return a.name.localeCompare(b.name);
       } else if (sortOption === 'date') {
-        return new Date(b.registration_date) - new Date(a.registration_date);
+        return new Date(b.registeredDateTime) - new Date(a.registeredDateTime);
       }
       return 0;
     });
@@ -81,22 +80,14 @@ const ProductList = ({ products }) => {
                     <h5 className="card-title mb-0" style={cardTitleStyle}>
                       {product.name}
                     </h5>
-                    {product.is_authentic ? (
-                      <span className="badge bg-success" style={badgeStyle}>
-                        <FaCheck style={{ marginRight: '4px' }} /> Authentic
-                      </span>
-                    ) : (
-                      <span className="badge bg-danger" style={badgeStyle}>
-                        <FaTimes style={{ marginRight: '4px' }} /> Not Verified
-                      </span>
-                    )}
+                    <span className="badge bg-success" style={badgeStyle}>
+                      <FaCheck style={{ marginRight: '4px' }} /> Authentic
+                    </span>
                   </div>
 
                   <div style={cardContentStyle}>
                     <p><strong>Brand:</strong> {product.brand}</p>
-                    <p><strong>Registered:</strong> {formatDate(product.registration_date)}</p>
-                    <p><strong>Description:</strong> {product.description}</p>
-                    <p><strong>Unique Identifier:</strong> {product.uniqueIdentifier}</p>
+                    <p><strong>Registered:</strong> {formatDate(product.registeredDateTime)}</p>
                   </div>
 
                   {/* QR Code */}
@@ -106,9 +97,8 @@ const ProductList = ({ products }) => {
                         name: product.name,
                         brand: product.brand,
                         description: product.description,
-                        uniqueIdentifier: product.uniqueIdentifier,
-                        registeredDate: formatDate(product.registration_date),
-                        isAuthentic: product.is_authentic,
+                        registeredDate: formatDate(product.registeredDateTime),
+                        isAuthentic: true,
                       })}
                       size={150}
                       level="H"
