@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Web3 from 'web3';
 import { useRouter } from 'next/router';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import Header from '../components/Header';
 import { FaBitcoin, FaEthereum, FaCube, FaCamera } from 'react-icons/fa';
 import { CheckCircle } from 'lucide-react';
 import jsQR from 'jsqr';
-import { Alert } from 'react-bootstrap';
 import { RingLoader } from 'react-spinners';
+import emailjs from 'emailjs-com';
 
 // Contract details from AddProductForm
 const contractABI = [
@@ -52,14 +54,13 @@ const contractABI = [
     type: "function"
   }
 ];
-const contractAddress = '0x1890E27C98637259fd9D5FEB0dAdb48b93640e99';
+const contractAddress = '0x5Cf3988160D1C0491723a67dC3F6F5390C77F174';
 
 const QRScanner = () => {
   const router = useRouter();
   const [web3, setWeb3] = useState(null);
   const [contract, setContract] = useState(null);
   const [account, setAccount] = useState('');
-  const [errorMessage, setErrorMessage] = useState(null);
   const [isScanning, setIsScanning] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const videoRef = useRef(null);
@@ -67,20 +68,30 @@ const QRScanner = () => {
   const isProcessingRef = useRef(false);
   const scanIntervalRef = useRef(null);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
-  
 
-  // Centralized Error Handling Function
-  const handleError = useCallback((message, type = 'danger') => {
+  // Centralized Error Handling Function with Toastify
+  const handleError = useCallback((message, type = 'error') => {
     console.error(message);
-    setErrorMessage({
-      text: message,
-      type: type
-    });
+    
+    // Map error types to Toastify types
+    const toastTypes = {
+      'error': toast.error,
+      'warning': toast.warn,
+      'success': toast.success,
+      'info': toast.info
+    };
 
-    // Auto-clear error after 5 seconds
-    setTimeout(() => {
-      setErrorMessage(null);
-    }, 5000);
+    // Use the appropriate toast method, defaulting to error
+    const toastMethod = toastTypes[type] || toast.error;
+    
+    toastMethod(message, {
+      position: "bottom-right",
+      autoClose: 5000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    });
   }, []);
 
   // Web3 Initialization with Improved Error Handling
@@ -160,6 +171,37 @@ const QRScanner = () => {
     }
   };
 
+  // Send email to manufacturer after a valid scan
+  const sendEmailToManufacturer = (productDetails) => {
+    const emailTemplateParams = {
+      to_name: 'Manufacturer Name',
+      from_name: 'Authentithief',
+      product_name: productDetails.name,
+      brand: productDetails.brand,
+      registered_date: productDetails.registeredDate,
+      owner: productDetails.owner,
+    };
+  
+    emailjs.send(
+      'service_5bfi5dv',
+      'template_j8fczgt',
+      emailTemplateParams,
+      'lKQRJHnHiJZUWYFZ7'
+    )
+    .then(response => {
+      toast.success('Email sent successfully to the manufacturer!', {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    })
+    .catch(error => {
+      toast.error('Failed to send email. Please try again later.', {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
+    });
+  };
+
   // Handle Redirect after Verification
   const handleRedirect = useCallback(async (productDetails) => {
     setIsLoading(true);
@@ -170,7 +212,10 @@ const QRScanner = () => {
       if (verificationResult && verificationResult.isAuthentic) {
         setShowSuccessAnimation(true);
         await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
+        // Send email to manufacturer after successful verification
+        sendEmailToManufacturer(productDetails);
+
         router.push(
           `/product-status?name=${encodeURIComponent(productDetails.name)}&brand=${encodeURIComponent(productDetails.brand)}&registeredDateTime=${encodeURIComponent(verificationResult.registrationTimestamp)}&owner=${encodeURIComponent(verificationResult.owner)}&isAuthentic=true`
         );
@@ -221,15 +266,20 @@ const QRScanner = () => {
           handleRedirect(productDetails);
           return true;
         } catch (err) {
-          console.log('Invalid QR code format:', err);
-          // Don't redirect immediately for invalid format
+          toast.error('Invalid QR code format', {
+            position: "bottom-right",
+            autoClose: 3000,
+          });
           return false;
         }
       }
       // No QR code found - this is normal and shouldn't trigger an error
       return false;
     } catch (err) {
-      console.error('Error processing QR code:', err);
+      toast.error('Error processing QR code', {
+        position: "bottom-right",
+        autoClose: 3000,
+      });
       return false;
     } finally {
       isProcessingRef.current = false;
@@ -256,12 +306,12 @@ const QRScanner = () => {
         });
   
         const canvas = document.createElement('canvas');
-        const canvasContext = canvas.getContext('2d');
+        const ctx = canvas.getContext('2d');
         canvas.width = img.width;
         canvas.height = img.height;
-        canvasContext.drawImage(img, 0, 0, img.width, img.height);
+        ctx.drawImage(img, 0, 0);
   
-        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, img.width, img.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'dontInvert',
         });
@@ -269,33 +319,27 @@ const QRScanner = () => {
         if (code) {
           try {
             const productDetails = JSON.parse(code.data);
-  
-            // Validate QR code structure
-            if (!productDetails.name || 
-                !productDetails.brand || 
-                !productDetails.registeredDate) {
-              throw new Error('Invalid QR code data structure');
-            }
-  
             handleRedirect(productDetails);
           } catch (err) {
-            // Redirect to the product status page if invalid QR
-            handleError('Invalid QR code format or data: ' + err.message);
-            router.push('/product-status?invalid=true');
+            toast.error('Invalid QR code in uploaded image', {
+              position: "bottom-right",
+              autoClose: 3000,
+            });
           }
         } else {
-          // Redirect if no QR code detected
-          handleError('No QR code detected in the uploaded image.');
-          router.push('/product-status?invalid=true');
+          toast.warning('No QR code found in the image', {
+            position: "bottom-right",
+            autoClose: 3000,
+          });
         }
       } catch (err) {
-        handleError('Error processing file input: ' + err.message);
-        router.push('/product-status?invalid=true');
+        toast.error('Error reading file', {
+          position: "bottom-right",
+          autoClose: 3000,
+        });
       }
-  
-      e.target.value = null;
     },
-    [handleRedirect, handleError, router]
+    [handleRedirect]
   );
 
   // Video Stream Setup
@@ -394,215 +438,207 @@ const QRScanner = () => {
                             color: '#4CAF50',
                             animation: 'scale-in 0.5s ease-out'
                           }}
-                        />
-                        <p className="mt-3" style={successTextStyle}>QR Code Verified!</p>
-                      </div>
-                    ) : (
-                      <div className="loading-animation" style={loadingAnimationStyle}>
-                        <RingLoader
-                          color="#00ff00"
-                          loading={true}
-                          size={100}
-                          speedMultiplier={1}
-                        />
-                        <p className="mt-4" style={loadingTextStyle}>Verifying QR Code...</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <video 
-                    ref={videoRef} 
-                    style={videoStyle}
-                    playsInline 
-                  />
-                )}
+                        /><p className="mt-3" style={successTextStyle}>QR Code Verified!</p>
+                        </div>
+                      ) : (
+                        <div className="loading-animation" style={loadingAnimationStyle}>
+                          <RingLoader
+                            color="#00ff00"
+                            loading={true}
+                            size={100}
+                            speedMultiplier={1}
+                          />
+                          <p className="mt-4" style={loadingTextStyle}>Verifying QR Code...</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <video 
+                      ref={videoRef} 
+                      style={videoStyle}
+                      playsInline 
+                    />
+                  )}
+                </div>
+                
+                <button
+                  className="btn btn-primary w-100 mt-3"
+                  onClick={() => fileInputRef.current.click()}
+                  disabled={isLoading || showSuccessAnimation}
+                  style={uploadButtonStyle}
+                >
+                  Upload QR Code Image
+                </button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  ref={fileInputRef}
+                  style={{ display: 'none' }}
+                  onChange={handleFileInputChange}
+                />
               </div>
-              
-              <button
-                className="btn btn-primary w-100 mt-3"
-                onClick={() => fileInputRef.current.click()}
-                disabled={isLoading || showSuccessAnimation}
-                style={uploadButtonStyle}
-              >
-                Upload QR Code Image
-              </button>
-              <input
-                type="file"
-                accept="image/*"
-                capture="environment"
-                ref={fileInputRef}
-                style={{ display: 'none' }}
-                onChange={handleFileInputChange}
-              />
             </div>
           </div>
         </div>
+  
+        {/* Add ToastContainer */}
+        <ToastContainer 
+          position="bottom-right"
+          autoClose={5000}
+          hideProgressBar={false}
+          newestOnTop={false}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+        />
+  
+        <style jsx>{`
+          @keyframes scale-in {
+            0% {
+              transform: scale(0);
+              opacity: 0;
+            }
+            50% {
+              transform: scale(1.2);
+            }
+            100% {
+              transform: scale(1);
+              opacity: 1;
+            }
+          }
+          
+          @keyframes fade-in {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+        `}</style>
       </div>
-
-      {errorMessage && (
-        <Alert 
-          variant={errorMessage.type} 
-          onClose={() => setErrorMessage(null)} 
-          dismissible
-          style={alertStyle}
-        >
-          {errorMessage.text}
-        </Alert>
-      )}
-
-      <style jsx>{`
-        @keyframes scale-in {
-          0% {
-            transform: scale(0);
-            opacity: 0;
-          }
-          50% {
-            transform: scale(1.2);
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
-        }
-        
-        @keyframes fade-in {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-      `}</style>
-    </div>
-  );
-};
-
-// Enhanced styles
-const containerStyle = {
-  background: 'radial-gradient(circle, #330066, #000000)',
-  minHeight: '100vh',
-  color: '#fff',
-  paddingTop: '5vh',
-  padding: '15px',
-  height: '100vh',
-  overflow: 'hidden'
-};
-
-const cardStyle = {
-  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  padding: '1.5rem',
-  borderRadius: '15px',
-  boxShadow: '0 0 30px rgba(0, 0, 0, 0.5)',
-  border: '1px solid rgba(255, 255, 255, 0.1)'
-};
-
-const authentithiefTitleStyle = {
-  fontSize: '2.5rem',
-  fontWeight: 'bold',
-  marginBottom: '1rem',
-  textAlign: 'center',
-  textShadow: '0 0 15px rgba(255, 255, 255, 0.3)',
-  color: '#f0f0f0',
-  letterSpacing: '2px'
-};
-
-const titleStyle = {
-  fontSize: '2rem',
-  fontWeight: 'bold',
-  marginBottom: '1.5rem',
-  textAlign: 'center',
-  textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
-  color: '#f0f0f0'
-};
-
-const scannerContainerStyle = {
-  position: 'relative',
-  width: '100%',
-  maxWidth: '500px',
-  margin: '0 auto',
-  aspectRatio: '4/3',
-  overflow: 'hidden',
-  borderRadius: '10px'
-};
-
-const videoStyle = {
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover',
-  borderRadius: '10px'
-};
-
-const loadingOverlayStyle = {
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-  borderRadius: '10px'
-};
-
-const successAnimationStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center'
-};
-
-const loadingAnimationStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center'
-};
-
-const successTextStyle = {
-  fontSize: '1.5rem',
-  color: '#4CAF50',
-  marginTop: '1rem',
-  animation: 'fade-in 0.5s ease-out 0.3s both',
-  textAlign: 'center'
-};
-
-const loadingTextStyle = {
-  fontSize: '1.2rem',
-  color: '#00ff00',
-  textAlign: 'center'
-};
-
-const cryptoIconStyle = {
-  fontSize: '3rem',
-  marginRight: '0.5rem',
-  color: '#f0f0f0'
-};
-
-const uploadButtonStyle = {
-  backgroundColor: '#4CAF50',
-  border: 'none',
-  padding: '12px',
-  fontSize: '1.1rem',
-  fontWeight: '500',
-  transition: 'all 0.3s ease',
-  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-  ':hover': {
-    backgroundColor: '#45a049',
-    transform: 'translateY(-2px)'
-  }
-};
-
-const alertStyle = {
-  position: 'fixed',
-  bottom: '20px',
-  right: '20px',
-  zIndex: 9999,
-  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.2)',
-  animation: 'fade-in 0.5s ease-out'
-};
-
-export default QRScanner;
+    );
+  };
+  
+  // Enhanced styles
+  const containerStyle = {
+    background: 'radial-gradient(circle, #330066, #000000)',
+    minHeight: '100vh',
+    color: '#fff',
+    paddingTop: '5vh',
+    padding: '15px',
+    height: '100vh',
+    overflow: 'hidden'
+  };
+  
+  const cardStyle = {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: '1.5rem',
+    borderRadius: '15px',
+    boxShadow: '0 0 30px rgba(0, 0, 0, 0.5)',
+    border: '1px solid rgba(255, 255, 255, 0.1)'
+  };
+  
+  const authentithiefTitleStyle = {
+    fontSize: '2.5rem',
+    fontWeight: 'bold',
+    marginBottom: '1rem',
+    textAlign: 'center',
+    textShadow: '0 0 15px rgba(255, 255, 255, 0.3)',
+    color: '#f0f0f0',
+    letterSpacing: '2px'
+  };
+  
+  const titleStyle = {
+    fontSize: '2rem',
+    fontWeight: 'bold',
+    marginBottom: '1.5rem',
+    textAlign: 'center',
+    textShadow: '0 0 10px rgba(255, 255, 255, 0.5)',
+    color: '#f0f0f0'
+  };
+  
+  const scannerContainerStyle = {
+    position: 'relative',
+    width: '100%',
+    maxWidth: '500px',
+    margin: '0 auto',
+    aspectRatio: '4/3',
+    overflow: 'hidden',
+    borderRadius: '10px'
+  };
+  
+  const videoStyle = {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+    borderRadius: '10px'
+  };
+  
+  const loadingOverlayStyle = {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderRadius: '10px'
+  };
+  
+  const successAnimationStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center'
+  };
+  
+  const loadingAnimationStyle = {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center'
+  };
+  
+  const successTextStyle = {
+    fontSize: '1.5rem',
+    color: '#4CAF50',
+    marginTop: '1rem',
+    animation: 'fade-in 0.5s ease-out 0.3s both',
+    textAlign: 'center'
+  };
+  
+  const loadingTextStyle = {
+    fontSize: '1.2rem',
+    color: '#00ff00',
+    textAlign: 'center'
+  };
+  
+  const cryptoIconStyle = {
+    fontSize: '3rem',
+    marginRight: '0.5rem',
+    color: '#f0f0f0'
+  };
+  
+  const uploadButtonStyle = {
+    backgroundColor: '#4CAF50',
+    border: 'none',
+    padding: '12px',
+    fontSize: '1.1rem',
+    fontWeight: '500',
+    transition: 'all 0.3s ease',
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+    ':hover': {
+      backgroundColor: '#45a049',
+      transform: 'translateY(-2px)'
+    }
+  };
+  
+  export default QRScanner;

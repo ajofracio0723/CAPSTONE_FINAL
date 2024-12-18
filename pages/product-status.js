@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import Header from '../components/Header';
 import { useRouter } from 'next/router';
 
@@ -15,14 +17,36 @@ const ProductStatus = () => {
       if (query.invalid === 'true') {
         setAuthentic(false);
         setMessage('The scanned QR code is not recognized or not found in the blockchain. Possible counterfeit.');
+        
+        // Display toast notification for invalid product
+        toast.error('Product is Not Authentic', {
+          position: "top-center",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+        });
       } else if (query.isAuthentic === 'true') {
         setAuthentic(true);
-        setProductDetails({
+        const productInfo = {
           name: query.name,
           brand: query.brand,
           registeredDateTime: new Date(parseInt(query.registeredDateTime) * 1000).toLocaleString(),
           owner: query.owner,
-          // Additional blockchain verification details
+        };
+        setProductDetails(productInfo);
+        
+        // Display toast notification for authentic product
+        toast.success('Product is Authentic', {
+          position: "top-center",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
         });
       }
     }
@@ -64,6 +88,19 @@ const ProductStatus = () => {
           </div>
         </div>
       </div>
+
+      {/* Add ToastContainer */}
+      <ToastContainer 
+        position="top-center"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </div>
   );
 };

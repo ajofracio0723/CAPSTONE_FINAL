@@ -49,7 +49,7 @@ const contractABI = [
   }
 ];
 
-const contractAddress = '0x1890E27C98637259fd9D5FEB0dAdb48b93640e99';
+const contractAddress = '0x1d8cfD258d595d49A7048481A471e45604a4Ba6E';
 
 const AddProductForm = () => {
   const [productName, setProductName] = useState('');
