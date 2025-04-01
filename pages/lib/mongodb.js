@@ -31,7 +31,9 @@ export async function connectToDatabase(uri) {
     // Extract database name from URI
     let dbName;
     try {
-      dbName = new URL(connectionUri).pathname.substring(1);
+      // Using regex instead of URL constructor for better compatibility
+      const dbMatch = connectionUri.match(/\/([^/?]+)(\?|$)/);
+      dbName = dbMatch ? dbMatch[1] : 'authentithief';
     } catch (urlError) {
       console.warn("Could not parse database name from URI:", urlError.message);
       dbName = 'authentithief'; // Fallback to default
