@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { FaCheck } from 'react-icons/fa';
+import { FaCheck, FaDownload, FaTag } from 'react-icons/fa';
 import { QRCodeCanvas } from 'qrcode.react';
 
-const ProductList = ({ products }) => {
+const ProductList = ({ products, registrationFee }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortOption, setSortOption] = useState('');
 
@@ -34,10 +34,24 @@ const ProductList = ({ products }) => {
     });
   }, [products, searchTerm, sortOption]);
 
+  const downloadQRCode = (index) => {
+    const canvas = document.getElementById(`qr-code-${index}`);
+    const pngUrl = canvas.toDataURL('image/png', 1.0);
+    const downloadLink = document.createElement('a');
+    downloadLink.href = pngUrl;
+    downloadLink.download = `product-${index}-qrcode.png`;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+  };
+
   return (
     <div className="container" style={containerStyle}>
       <div className="mb-4">
         <h2 className="text-white mb-4" style={headingStyle}>Added Products</h2>
+        <div className="text-center text-white mb-3" style={registrationFeeStyle}>
+          Registration Fee: {registrationFee} Wei
+        </div>
         <div className="search-sort-container" style={searchSortContainerStyle}>
           <div style={inputGroupStyle}>
             <label htmlFor="search" style={labelStyle}>Search:</label>
@@ -86,24 +100,36 @@ const ProductList = ({ products }) => {
                   </div>
 
                   <div style={cardContentStyle}>
-                    <p><strong>Brand:</strong> {product.brand}</p>
                     <p><strong>Registered:</strong> {formatDate(product.registeredDateTime)}</p>
+                    <p><FaTag style={{ marginRight: '5px' }} /><strong>Product ID:</strong> {index}</p>
                   </div>
 
                   {/* QR Code */}
                   <div className="text-center mt-3">
                     <QRCodeCanvas
+                      id={`qr-code-${index}`}
                       value={JSON.stringify({
+                        productId: index,
                         name: product.name,
                         brand: product.brand,
                         description: product.description,
                         registeredDate: formatDate(product.registeredDateTime),
                         isAuthentic: true,
                       })}
-                      size={150}
+                      size={300}
                       level="H"
                       includeMargin={true}
                     />
+                  </div>
+
+                  {/* Download Button */}
+                  <div className="text-center mt-2">
+                    <button 
+                      onClick={() => downloadQRCode(index)}
+                      style={downloadButtonStyle}
+                    >
+                      <FaDownload style={{ marginRight: '5px' }} /> Download QR Code
+                    </button>
                   </div>
                 </div>
               </div>
@@ -115,6 +141,21 @@ const ProductList = ({ products }) => {
   );
 };
 
+const downloadButtonStyle = {
+  backgroundColor: '#8A2BE2',
+  color: 'white',
+  border: 'none',
+  padding: '10px 15px',
+  fontSize: '1rem',
+  borderRadius: '5px',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '5px',
+  marginTop: '10px',
+};
+
 const containerStyle = {
   padding: '2rem',
 };
@@ -123,6 +164,15 @@ const headingStyle = {
   fontSize: '2rem',
   fontWeight: 'bold',
   textShadow: '0 0 10px rgba(138, 43, 226, 0.5)',
+};
+
+const registrationFeeStyle = {
+  fontSize: '1rem',
+  marginBottom: '1rem',
+  backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  padding: '10px',
+  borderRadius: '5px',
+  display: 'inline-block',
 };
 
 const searchSortContainerStyle = {

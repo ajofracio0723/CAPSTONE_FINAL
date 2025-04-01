@@ -8,72 +8,76 @@ import { FaBitcoin, FaEthereum, FaCube, FaCamera } from 'react-icons/fa';
 import { CheckCircle } from 'lucide-react';
 import jsQR from 'jsqr';
 import { RingLoader } from 'react-spinners';
-import emailjs from 'emailjs-com';
 
-// Contract details from AddProductForm
+
+// Contract ABI and address
 const contractABI = [
   {
-    inputs: [
-      { internalType: "string", name: "_productName", type: "string" },
-      { internalType: "string", name: "_brand", type: "string" }
+    "inputs": [
+      { "internalType": "string", "name": "_productName", type: "string" },
+      { "internalType": "uint256", "name": "_expirationTimestamp", type: "uint256" }
     ],
-    name: "addProduct",
-    outputs: [],
-    stateMutability: "payable",
-    type: "function"
+    "name": "addProduct",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
   },
   {
-    inputs: [],
-    name: "getTotalProducts",
-    outputs: [
-      { internalType: "uint256", name: "", type: "uint256" }
-    ],
-    stateMutability: "view",
-    type: "function"
+    "inputs": [],
+    "name": "getTotalProducts",
+    "outputs": [{ "internalType": "uint256", "name": "", type: "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
   },
   {
-    inputs: [
-      { internalType: "uint256", name: "_start", type: "uint256" },
-      { internalType: "uint256", name: "_count", type: "uint256" }
+    "inputs": [
+      { "internalType": "uint256", "name": "_start", type: "uint256" },
+      { "internalType": "uint256", "name": "_count", type: "uint256" }
     ],
-    name: "getProductsPaginated",
-    outputs: [
+    "name": "getProductsPaginated",
+    "outputs": [
       {
-        components: [
-          { internalType: "string", name: "productName", type: "string" },
-          { internalType: "string", name: "brand", type: "string" },
-          { internalType: "address", name: "owner", type: "address" },
-          { internalType: "uint256", name: "registrationTimestamp", type: "uint256" }
+        "components": [
+          { "internalType": "string", "name": "productName", type: "string" },
+          { "internalType": "uint256", "name": "expirationTimestamp", type: "uint256" },
+          { "internalType": "address", "name": "owner", type: "address" },
+          { "internalType": "uint256", "name": "registrationTimestamp", type: "uint256" }
         ],
-        internalType: "struct ProductRegistry.Product[]",
-        name: "",
-        type: "tuple[]"
+        "internalType": "struct ProductRegistry.Product[]",
+        "name": "",
+        "type": "tuple[]"
       }
     ],
-    stateMutability: "view",
-    type: "function"
+    "stateMutability": "view",
+    "type": "function"
   }
 ];
-const contractAddress = '0x5Cf3988160D1C0491723a67dC3F6F5390C77F174';
+const contractAddress = '0xa918Ad6F552D4d91d44FeED9bE4D03A439fa04b1';
+
+// RPC URL - Replace with your own RPC URL for production
+const RPC_URL = 'http://127.0.0.1:8545'; // For Ganache local testing
+// For production, use a provider like Infura or Alchemy:
+// const RPC_URL = 'https://mainnet.infura.io/v3/YOUR_INFURA_KEY';
+// const RPC_URL = 'https://eth-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_KEY';
+
+// MongoDB URL - Normally retrieved from environment variables
+const MONGODB_URI = process.env.NEXT_PUBLIC_MONGODB_URI || 'mongodb://localhost:27017/authentithief';
 
 const QRScanner = () => {
   const router = useRouter();
   const [web3, setWeb3] = useState(null);
   const [contract, setContract] = useState(null);
-  const [account, setAccount] = useState('');
   const [isScanning, setIsScanning] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
   const isProcessingRef = useRef(false);
-  const scanIntervalRef = useRef(null);
   const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
 
-  // Centralized Error Handling Function with Toastify
+  // Centralized Error Handling Function
   const handleError = useCallback((message, type = 'error') => {
     console.error(message);
     
-    // Map error types to Toastify types
     const toastTypes = {
       'error': toast.error,
       'warning': toast.warn,
@@ -81,7 +85,6 @@ const QRScanner = () => {
       'info': toast.info
     };
 
-    // Use the appropriate toast method, defaulting to error
     const toastMethod = toastTypes[type] || toast.error;
     
     toastMethod(message, {
@@ -94,35 +97,27 @@ const QRScanner = () => {
     });
   }, []);
 
-  // Web3 Initialization with Improved Error Handling
+  // Web3 Initialization - No MetaMask Required
   useEffect(() => {
     const initWeb3 = async () => {
       try {
-        if (!window.ethereum) {
-          throw new Error('No Ethereum wallet detected. Please install MetaMask.');
-        }
-
-        const web3Instance = new Web3(window.ethereum);
-        
-        try {
-          await window.ethereum.request({ method: 'eth_requestAccounts' });
-        } catch (permissionError) {
-          throw new Error('Permission to access Ethereum wallet denied.');
-        }
-
-        const accounts = await web3Instance.eth.getAccounts();
-        if (accounts.length === 0) {
-          throw new Error('No Ethereum accounts found. Please connect your wallet.');
-        }
-
+        // Create Web3 instance with direct RPC connection
+        const web3Instance = new Web3(new Web3.providers.HttpProvider(RPC_URL));
         setWeb3(web3Instance);
-        setAccount(accounts[0]);
 
+        // Create contract instance
         const contractInstance = new web3Instance.eth.Contract(
           contractABI, 
           contractAddress
         );
         setContract(contractInstance);
+
+        // Test connection
+        try {
+          await web3Instance.eth.getBlockNumber();
+        } catch (connectionError) {
+          throw new Error(`Failed to connect to blockchain: ${connectionError.message}`);
+        }
 
       } catch (error) {
         handleError(error.message || 'Web3 initialization failed');
@@ -132,7 +127,30 @@ const QRScanner = () => {
     initWeb3();
   }, [handleError]);
 
-  // Verify Product on Blockchain with More Detailed Error Handling
+  // Helper function to convert BigInt values to regular numbers
+  const normalizeBlockchainData = (data) => {
+    if (data === null || data === undefined) return data;
+    
+    if (typeof data === 'bigint') {
+      return Number(data);
+    }
+    
+    if (typeof data === 'object' && !Array.isArray(data)) {
+      const result = {};
+      for (const key in data) {
+        result[key] = normalizeBlockchainData(data[key]);
+      }
+      return result;
+    }
+    
+    if (Array.isArray(data)) {
+      return data.map(item => normalizeBlockchainData(item));
+    }
+    
+    return data;
+  };
+
+  // Verify Product on Blockchain with Read-only Access
   const verifyProductOnBlockchain = async (productDetails) => {
     if (!contract || !web3) {
       handleError('Web3 or contract not initialized');
@@ -141,21 +159,28 @@ const QRScanner = () => {
 
     try {
       const totalProducts = await contract.methods.getTotalProducts().call();
+      const totalProductsNumber = Number(totalProducts);
+      const currentTimestamp = Math.floor(Date.now() / 1000); // Current time in seconds
 
       const batchSize = 20;
-      for (let i = 0; i < totalProducts; i += batchSize) {
+      for (let i = 0; i < totalProductsNumber; i += batchSize) {
         try {
           const batch = await contract.methods.getProductsPaginated(i, batchSize).call();
+          const normalizedBatch = normalizeBlockchainData(batch);
           
-          for (const product of batch) {
-            if (
-              product.productName.toLowerCase() === productDetails.name.toLowerCase() &&
-              product.brand.toLowerCase() === productDetails.brand.toLowerCase()
-            ) {
+          for (const product of normalizedBatch) {
+            // Check product name
+            const isNameMatch = product.productName.toLowerCase() === productDetails.name.toLowerCase();
+            
+            // Found a matching product - checking expiration will happen after MongoDB check
+            if (isNameMatch) {
               return {
                 isAuthentic: true,
                 owner: product.owner,
-                registrationTimestamp: product.registrationTimestamp
+                registrationTimestamp: product.registrationTimestamp,
+                expirationTimestamp: product.expirationTimestamp,
+                // Original expiration timestamp from blockchain
+                originalExpirationTimestamp: product.expirationTimestamp
               };
             }
           }
@@ -164,42 +189,87 @@ const QRScanner = () => {
         }
       }
 
-      return { isAuthentic: false };
+      return { isAuthentic: false, reason: 'Product not found' };
     } catch (error) {
       handleError(`Blockchain verification error: ${error.message}`);
       return null;
     }
   };
 
-  // Send email to manufacturer after a valid scan
-  const sendEmailToManufacturer = (productDetails) => {
-    const emailTemplateParams = {
-      to_name: 'Manufacturer Name',
-      from_name: 'Authentithief',
-      product_name: productDetails.name,
-      brand: productDetails.brand,
-      registered_date: productDetails.registeredDate,
-      owner: productDetails.owner,
+  // Record Scan in MongoDB and Get First Scan Info
+  const recordProductScan = async (product) => {
+    try {
+      // Create a payload that matches what your API expects
+      const payload = {
+        productName: product.name,
+        expirationTimestamp: Number(product.originalExpirationTimestamp),
+        owner: product.owner,
+        registrationTimestamp: Number(product.registrationTimestamp),
+        // Include MongoDB URI in case environment variable is not set
+        mongodbUri: MONGODB_URI  
+      };
+      
+      console.log("Sending payload to API:", payload);
+    
+      const response = await fetch('/api/scan-product', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        // Add timeout to prevent long-hanging requests
+        signal: AbortSignal.timeout(20000) // 20 second timeout
+      });
+    
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { error: 'Unknown server error' };
+        }
+        throw new Error(errorData.error || `Server responded with ${response.status}`);
+      }
+    
+      const data = await response.json();
+      console.log("Scan recorded successfully:", data);
+      return data;
+    } catch (error) {
+      // Handle the MongoDB URI error specifically
+      if (error.message.includes('MongoDB URI')) {
+        handleError('MongoDB connection not configured. Using default values for product verification.', 'warning');
+      } else {
+        handleError(`Failed to record scan: ${error.message}`);
+      }
+      
+      // Return default values if error
+      return {
+        isFirstScan: false,
+        totalScans: 1,
+        firstScanTimestamp: Math.floor(Date.now() / 1000),
+        expirationTimestamp: Number(product.originalExpirationTimestamp)
+      };
+    }
+  };
+
+  // Calculate Dynamic Expiration
+  const calculateDynamicExpiration = (originalExpiration, firstScanTimestamp) => {
+    const currentTimestamp = Math.floor(Date.now() / 1000);
+    
+    // Original duration from first scan (in seconds)
+    const originalDuration = Number(originalExpiration) - Number(firstScanTimestamp);
+    
+    // New expiration = first scan time + original duration
+    const newExpiration = Number(firstScanTimestamp) + originalDuration;
+    
+    // Calculate days to expire
+    const secondsToExpire = newExpiration - currentTimestamp;
+    const daysToExpire = Math.floor(secondsToExpire / (24 * 3600));
+    
+    return {
+      expirationTimestamp: newExpiration,
+      daysToExpire: daysToExpire
     };
-  
-    emailjs.send(
-      'service_5bfi5dv',
-      'template_j8fczgt',
-      emailTemplateParams,
-      'lKQRJHnHiJZUWYFZ7'
-    )
-    .then(response => {
-      toast.success('Email sent successfully to the manufacturer!', {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-    })
-    .catch(error => {
-      toast.error('Failed to send email. Please try again later.', {
-        position: "bottom-right",
-        autoClose: 3000,
-      });
-    });
   };
 
   // Handle Redirect after Verification
@@ -211,17 +281,34 @@ const QRScanner = () => {
 
       if (verificationResult && verificationResult.isAuthentic) {
         setShowSuccessAnimation(true);
+        
+        // Product details for MongoDB
+        const productForDb = {
+          ...productDetails,
+          owner: verificationResult.owner,
+          registrationTimestamp: Number(verificationResult.registrationTimestamp),
+          originalExpirationTimestamp: Number(verificationResult.originalExpirationTimestamp)
+        };
+        
+        // Record scan in MongoDB and get first scan info
+        const scanInfo = await recordProductScan(productForDb);
+        
+        // Calculate dynamic expiration based on first scan date
+        const dynamicExpiration = calculateDynamicExpiration(
+          Number(scanInfo.expirationTimestamp),
+          Number(scanInfo.firstScanTimestamp)
+        );
+
         await new Promise(resolve => setTimeout(resolve, 2000));
 
-        // Send email to manufacturer after successful verification
-        sendEmailToManufacturer(productDetails);
-
         router.push(
-          `/product-status?name=${encodeURIComponent(productDetails.name)}&brand=${encodeURIComponent(productDetails.brand)}&registeredDateTime=${encodeURIComponent(verificationResult.registrationTimestamp)}&owner=${encodeURIComponent(verificationResult.owner)}&isAuthentic=true`
+          `/product-status?name=${encodeURIComponent(productDetails.name)}&expirationTimestamp=${encodeURIComponent(dynamicExpiration.expirationTimestamp)}&registeredDateTime=${encodeURIComponent(Number(verificationResult.registrationTimestamp))}&owner=${encodeURIComponent(verificationResult.owner)}&isAuthentic=true&daysToExpire=${dynamicExpiration.daysToExpire}&isFirstScan=${scanInfo.isFirstScan}&totalScans=${scanInfo.totalScans}`
         );
       } else {
-        handleError('Product not found in blockchain registry', 'warning');
-        router.push('/product-status?invalid=true');
+        // More specific error message for expiration
+        const errorMessage = verificationResult?.reason || 'Product not found in blockchain registry';
+        handleError(errorMessage, 'warning');
+        router.push('/product-status?invalid=true&reason=expired');
       }
     } catch (error) {
       handleError(`Verification process failed: ${error.message}`);
@@ -255,12 +342,13 @@ const QRScanner = () => {
         try {
           const productDetails = JSON.parse(code.data);
   
-          // Validate QR code structure
-          if (!productDetails.name || 
-              !productDetails.brand || 
-              !productDetails.registeredDate) {
-            throw new Error('Invalid QR code data structure');
+          // Basic validation for the QR code data
+          if (!productDetails.name || !productDetails.expirationTimestamp) {
+            throw new Error('Invalid product details in QR code');
           }
+          
+          // Ensure expirationTimestamp is a number
+          productDetails.expirationTimestamp = Number(productDetails.expirationTimestamp);
   
           setIsScanning(false);
           handleRedirect(productDetails);
@@ -273,7 +361,6 @@ const QRScanner = () => {
           return false;
         }
       }
-      // No QR code found - this is normal and shouldn't trigger an error
       return false;
     } catch (err) {
       toast.error('Error processing QR code', {
@@ -285,7 +372,7 @@ const QRScanner = () => {
       isProcessingRef.current = false;
     }
   }, [handleRedirect, isScanning]);
-  
+
   // File Input Change Handler
   const handleFileInputChange = useCallback(
     async (e) => {
@@ -319,9 +406,18 @@ const QRScanner = () => {
         if (code) {
           try {
             const productDetails = JSON.parse(code.data);
+            
+            // Basic validation
+            if (!productDetails.name || !productDetails.expirationTimestamp) {
+              throw new Error('Invalid product details in QR code');
+            }
+            
+            // Ensure expirationTimestamp is a number
+            productDetails.expirationTimestamp = Number(productDetails.expirationTimestamp);
+            
             handleRedirect(productDetails);
           } catch (err) {
-            toast.error('Invalid QR code in uploaded image', {
+            toast.error('Invalid QR code format', {
               position: "bottom-right",
               autoClose: 3000,
             });
@@ -341,9 +437,9 @@ const QRScanner = () => {
     },
     [handleRedirect]
   );
-
+  
   // Video Stream Setup
-   useEffect(() => {
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
@@ -446,7 +542,7 @@ const QRScanner = () => {
                             color="#00ff00"
                             loading={true}
                             size={100}
-                            speedMultiplier={1}
+                            speedMultiplier={0.1}
                           />
                           <p className="mt-4" style={loadingTextStyle}>Verifying QR Code...</p>
                         </div>
@@ -634,11 +730,7 @@ const QRScanner = () => {
     fontSize: '1.1rem',
     fontWeight: '500',
     transition: 'all 0.3s ease',
-    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-    ':hover': {
-      backgroundColor: '#45a049',
-      transform: 'translateY(-2px)'
-    }
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
   };
   
   export default QRScanner;

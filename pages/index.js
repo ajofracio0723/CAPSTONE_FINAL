@@ -1,39 +1,56 @@
 import React, { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import { useRouter } from 'next/router';
-import { FaBitcoin, FaEthereum, FaCubes } from 'react-icons/fa';
+import { FaBitcoin, FaEthereum, FaCubes, FaBarcode, FaQrcode, FaTag, FaShieldAlt } from 'react-icons/fa';
 import { SiSolidity } from 'react-icons/si';
+import { MdVerified } from 'react-icons/md';
 import Image from 'next/image';
 import landingImage from '../public/images/1.png';
 import image2 from '../public/images/2.png';
 import image3 from '../public/images/3.png';
+import image4710 from '../public/images/4710.png';
+import logo from '../public/images/4710 logo.png';
 import MoreContent from './MoreContent';
-
 
 const Home = () => {
   const router = useRouter();
   const [loaded, setLoaded] = useState(false);
+  const [buttonHover, setButtonHover] = useState(false);
+  const [buttonClick, setButtonClick] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoaded(true);
     }, 1000);
-
     return () => clearTimeout(timer);
   }, []);
 
-  const handleAddProductClick = () => {
-    router.push('/add-product');
-  };
-
   const handleQRScannerClick = () => {
-    router.push('/qrscanner');
+    setButtonClick(true);
+    setTimeout(() => {
+      setButtonClick(false);
+      router.push('/qrscanner');
+    }, 300);
   };
 
   const handleLearnMoreClick = () => {
     const moreContentSection = document.getElementById('moreContent');
     moreContentSection.scrollIntoView({ behavior: 'smooth' });
   };
+
+  const buttonHoverStyle = buttonHover ? {
+    backgroundColor: 'rgba(142, 45, 226, 0.3)',
+    border: '2px solid rgba(255, 255, 255, 0.9)',
+    transform: 'translateY(-3px)',
+    boxShadow: '0 0 20px rgba(142, 45, 226, 0.7), 0 0 30px rgba(255, 255, 255, 0.3)',
+    textShadow: '0 0 8px rgba(255, 255, 255, 0.8)',
+  } : {};
+
+  const buttonClickStyle = buttonClick ? {
+    transform: 'scale(0.95)',
+    boxShadow: '0 0 25px rgba(142, 45, 226, 0.9), 0 0 40px rgba(255, 255, 255, 0.5)',
+    backgroundColor: 'rgba(142, 45, 226, 0.5)',
+  } : {};
 
   return (
     <div style={containerStyle}>
@@ -45,29 +62,59 @@ const Home = () => {
             <FaEthereum style={iconStyle} />
             <FaCubes style={iconStyle} />
           </div>
-          <h1 style={titleStyle}>AUTHENTITHIEF</h1>
-          <p style={textStyle}>Revolutionizing anti-counterfeit with blockchain technology.</p>
+          <div style={logoContainerStyle}>
+            <Image 
+              src={logo} 
+              alt="4710 Logo" 
+              width={300} 
+              height={300} 
+              objectFit="contain" 
+            />
+          </div>
           <div style={buttonContainerStyle}>
-            <button onClick={handleAddProductClick} style={buttonStyle}>
-              Manufacturer
-            </button>
-            <button onClick={handleQRScannerClick} style={buttonStyle}>
-              Consumer
+            <button
+              onClick={handleQRScannerClick}
+              onMouseEnter={() => setButtonHover(true)}
+              onMouseLeave={() => setButtonHover(false)}
+              style={{
+                ...buttonStyle,
+                ...buttonHoverStyle,
+                ...buttonClickStyle,
+              }}
+            >
+              <div style={{
+                ...buttonGlowStyle,
+                opacity: buttonHover ? 1 : 0,
+              }}></div>
+              Authenticate Product
+              <div style={{
+                position: 'absolute',
+                right: '20px',
+                opacity: buttonHover ? 1 : 0,
+                transition: 'opacity 0.3s ease, transform 0.3s ease',
+                transform: buttonHover ? 'rotate(0deg) scale(1.2)' : 'rotate(-45deg) scale(0.8)',
+                display: 'flex',
+              }}>
+                <MdVerified style={{
+                  fontSize: '1.3rem',
+                  color: '#4cff4c',
+                }} />
+              </div>
             </button>
           </div>
         </div>
         <div style={rightContentStyle}>
-          <video autoPlay loop muted style={backgroundVideoStyle}>
-            <source src="/videos/2.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
+          <Image 
+            src={image4710} 
+            alt="4710 Blockchain Technology" 
+            style={backgroundImageStyle}
+            width={500}
+            height={500}
+            objectFit="cover"
+          />
           <div style={learnMoreContainerStyle}>
-            <button onClick={handleLearnMoreClick} style={learnMoreButtonStyle}>
-              Learn More
-            </button>
-            <p style={antiCounterfeitTextStyle}>
-              Learn more about our revolutionary anti-counterfeit system powered by blockchain technology.
-            </p>
+            <button onClick={handleLearnMoreClick} style={learnMoreButtonStyle}>Learn More</button>
+            <p style={antiCounterfeitTextStyle}>Learn more about our revolutionary anti-counterfeit system powered by blockchain technology.</p>
           </div>
         </div>
       </div>
@@ -119,15 +166,24 @@ const leftContentStyle = {
 const rightContentStyle = {
   position: 'relative',
   flex: '1',
-  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
   paddingTop: '5rem',
 };
 
-const backgroundVideoStyle = {
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover',
+// Added the missing backgroundImageStyle
+const backgroundImageStyle = {
   borderRadius: '20px',
+  maxWidth: '100%',
+  height: 'auto',
+  marginBottom: '2rem',
+};
+
+const logoContainerStyle = {
+  display: 'flex',
+  justifyContent: 'center',
+  marginBottom: '2rem',
 };
 
 const iconContainerStyle = {
@@ -164,14 +220,28 @@ const buttonStyle = {
   padding: '1rem 3rem',
   fontSize: '1.2rem',
   fontWeight: 'bold',
-  backgroundColor: 'transparent',
+  backgroundColor: 'rgba(74, 0, 224, 0.1)',
   color: '#fff',
-  border: '2px solid #fff',
+  border: '2px solid rgba(255, 255, 255, 0.7)',
   borderRadius: '50px',
   cursor: 'pointer',
-  marginRight: '1rem',
-  transition: 'background-color 0.3s ease',
-  boxShadow: '0 0 10px rgba(255, 255, 255, 0.3)',
+  transition: 'all 0.3s ease',
+  boxShadow: '0 0 15px rgba(142, 45, 226, 0.4)',
+  position: 'relative',
+  overflow: 'hidden',
+  zIndex: 1,
+};
+
+const buttonGlowStyle = {
+  content: '""',
+  position: 'absolute',
+  top: '-50%',
+  left: '-50%',
+  width: '200%',
+  height: '200%',
+  background: 'radial-gradient(circle, rgba(142, 45, 226, 0.3) 0%, rgba(142, 45, 226, 0) 70%)',
+  transition: 'opacity 0.3s ease',
+  zIndex: -1,
 };
 
 const learnMoreButtonStyle = {
@@ -226,7 +296,5 @@ const footerIconStyle = {
   width: '4rem',
   height: '4rem',
 };
-
-
 
 export default Home;

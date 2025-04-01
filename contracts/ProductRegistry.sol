@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 contract ProductRegistry {
     struct Product {
         string productName;
-        string brand;
+        uint256 expirationTimestamp;  // Changed from string brand to uint256 expirationTimestamp
         address owner;
         uint256 registrationTimestamp;
     }
@@ -12,7 +12,7 @@ contract ProductRegistry {
     Product[] public products; // Array to store products
     mapping(address => uint256[]) public ownerProductIndices; // Mapping to track products by owner
 
-    event ProductAdded(uint256 indexed productId, string productName, string brand, address indexed owner);
+    event ProductAdded(uint256 indexed productId, string productName, uint256 expirationTimestamp, address indexed owner);
     event FundsWithdrawn(address indexed admin, uint256 amount);
 
     address public admin;
@@ -29,7 +29,7 @@ contract ProductRegistry {
     // Function to add a product
     function addProduct(
         string memory _productName,
-        string memory _brand
+        uint256 _expirationTimestamp  // Changed from string _brand to uint256 _expirationTimestamp
     ) public payable {
         require(msg.value > 0, "Payment required to add a product");
 
@@ -37,7 +37,7 @@ contract ProductRegistry {
         uint256 newProductId = products.length;
         Product memory newProduct = Product({
             productName: _productName,
-            brand: _brand,
+            expirationTimestamp: _expirationTimestamp,  // Store expiration timestamp instead of brand
             owner: msg.sender,
             registrationTimestamp: block.timestamp
         });
@@ -48,7 +48,7 @@ contract ProductRegistry {
         // Track product indices for the owner
         ownerProductIndices[msg.sender].push(newProductId);
 
-        emit ProductAdded(newProductId, _productName, _brand, msg.sender);
+        emit ProductAdded(newProductId, _productName, _expirationTimestamp, msg.sender);
     }
 
     // Get total number of products
