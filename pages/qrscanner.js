@@ -9,7 +9,6 @@ import { CheckCircle } from 'lucide-react';
 import jsQR from 'jsqr';
 import { RingLoader } from 'react-spinners';
 
-
 // Contract ABI and address
 const contractABI = [
   {
@@ -56,12 +55,6 @@ const contractAddress = '0xa918Ad6F552D4d91d44FeED9bE4D03A439fa04b1';
 
 // RPC URL - Replace with your own RPC URL for production
 const RPC_URL = 'http://127.0.0.1:8545'; // For Ganache local testing
-// For production, use a provider like Infura or Alchemy:
-// const RPC_URL = 'https://mainnet.infura.io/v3/YOUR_INFURA_KEY';
-// const RPC_URL = 'https://eth-mainnet.g.alchemy.com/v2/YOUR_ALCHEMY_KEY';
-
-// MongoDB URL - Normally retrieved from environment variables
-const MONGODB_URI = process.env.NEXT_PUBLIC_MONGODB_URI || 'mongodb://localhost:27017/authentithief';
 
 const QRScanner = () => {
   const router = useRouter();
@@ -204,9 +197,8 @@ const QRScanner = () => {
         productName: product.name,
         expirationTimestamp: Number(product.originalExpirationTimestamp),
         owner: product.owner,
-        registrationTimestamp: Number(product.registrationTimestamp),
-        // Include MongoDB URI in case environment variable is not set
-        mongodbUri: MONGODB_URI  
+        registrationTimestamp: Number(product.registrationTimestamp)
+        // No need to include MongoDB URI here, as it should be set server-side
       };
       
       console.log("Sending payload to API:", payload);
@@ -235,12 +227,7 @@ const QRScanner = () => {
       console.log("Scan recorded successfully:", data);
       return data;
     } catch (error) {
-      // Handle the MongoDB URI error specifically
-      if (error.message.includes('MongoDB URI')) {
-        handleError('MongoDB connection not configured. Using default values for product verification.', 'warning');
-      } else {
-        handleError(`Failed to record scan: ${error.message}`);
-      }
+      handleError(`Failed to record scan: ${error.message}`);
       
       // Return default values if error
       return {

@@ -1,4 +1,6 @@
-import { connectToDatabase } from '../lib/mongodb';
+// Update pages/api/scan-product.js to import from the correct location
+
+import { connectToDatabase } from '../../lib/mongodb';  // Updated import path
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
