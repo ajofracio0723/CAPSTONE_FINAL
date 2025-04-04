@@ -165,7 +165,7 @@ const QRScanner = () => {
             // Check product name
             const isNameMatch = product.productName.toLowerCase() === productDetails.name.toLowerCase();
             
-            // Found a matching product - checking expiration will happen after MongoDB check
+            // Found a matching product
             if (isNameMatch) {
               return {
                 isAuthentic: true,
@@ -243,19 +243,29 @@ const QRScanner = () => {
   const calculateDynamicExpiration = (originalExpiration, firstScanTimestamp) => {
     const currentTimestamp = Math.floor(Date.now() / 1000);
     
-    // Original duration from first scan (in seconds)
+    // Get the intended duration from original expiration (relative to registration)
     const originalDuration = Number(originalExpiration) - Number(firstScanTimestamp);
     
-    // New expiration = first scan time + original duration
-    const newExpiration = Number(firstScanTimestamp) + originalDuration;
+    // Calculate when it should expire based on first scan
+    const actualExpiration = Number(firstScanTimestamp) + originalDuration;
     
-    // Calculate days to expire
-    const secondsToExpire = newExpiration - currentTimestamp;
+    // Check if expired
+    if (currentTimestamp > actualExpiration) {
+      return {
+        expirationTimestamp: actualExpiration,
+        daysToExpire: 0,
+        isExpired: true
+      };
+    }
+    
+    // Not expired, calculate remaining days
+    const secondsToExpire = actualExpiration - currentTimestamp;
     const daysToExpire = Math.floor(secondsToExpire / (24 * 3600));
     
     return {
-      expirationTimestamp: newExpiration,
-      daysToExpire: daysToExpire
+      expirationTimestamp: actualExpiration,
+      daysToExpire: daysToExpire,
+      isExpired: false
     };
   };
 
@@ -267,8 +277,6 @@ const QRScanner = () => {
       const verificationResult = await verifyProductOnBlockchain(productDetails);
 
       if (verificationResult && verificationResult.isAuthentic) {
-        setShowSuccessAnimation(true);
-        
         // Product details for MongoDB
         const productForDb = {
           ...productDetails,
@@ -286,16 +294,25 @@ const QRScanner = () => {
           Number(scanInfo.firstScanTimestamp)
         );
 
+        // If the product is expired (and not a first scan), mark as counterfeit
+        if (dynamicExpiration.isExpired && !scanInfo.isFirstScan) {
+          handleError('This product has expired and is no longer valid', 'warning');
+          router.push('/product-status?invalid=true&reason=This%20product%20has%20expired');
+          return;
+        }
+
+        // Show success animation for valid products
+        setShowSuccessAnimation(true);
         await new Promise(resolve => setTimeout(resolve, 2000));
 
         router.push(
           `/product-status?name=${encodeURIComponent(productDetails.name)}&expirationTimestamp=${encodeURIComponent(dynamicExpiration.expirationTimestamp)}&registeredDateTime=${encodeURIComponent(Number(verificationResult.registrationTimestamp))}&owner=${encodeURIComponent(verificationResult.owner)}&isAuthentic=true&daysToExpire=${dynamicExpiration.daysToExpire}&isFirstScan=${scanInfo.isFirstScan}&totalScans=${scanInfo.totalScans}`
         );
       } else {
-        // More specific error message for expiration
+        // Product not found in blockchain
         const errorMessage = verificationResult?.reason || 'Product not found in blockchain registry';
         handleError(errorMessage, 'warning');
-        router.push('/product-status?invalid=true&reason=expired');
+        router.push('/product-status?invalid=true&reason=Product%20not%20found%20in%20registry');
       }
     } catch (error) {
       handleError(`Verification process failed: ${error.message}`);
