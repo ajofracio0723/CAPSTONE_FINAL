@@ -23,10 +23,9 @@ const TimerInput = ({ onTimerChange }) => {
   const [minutes, setMinutes] = useState(5);
   const [seconds, setSeconds] = useState(0);
 
-  // Add dependency array to prevent infinite update loop
   useEffect(() => {
     onTimerChange({ minutes, seconds });
-  }, [minutes, seconds]); // Remove onTimerChange from dependencies
+  }, [minutes, seconds, onTimerChange]);
 
   return (
     <div className="d-flex align-items-center" style={timerInputStyle}>
@@ -111,16 +110,42 @@ const AddProductForm = () => {
 
   // Generate QR code when data changes
   useEffect(() => {
+    if (qrCodeData && canvasRef.current) {
+      QRCode.toCanvas(canvasRef.current, qrCodeData, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        scale: 8,
+        color: {
+          dark: '#000000',
+          light: '#ffffff'
+        }
+      }, (error) => {
+        if (error) console.error(error);
+      });
+
+      // Also generate a data URL for download
+      QRCode.toDataURL(qrCodeData, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        scale: 8
+      }, (err, url) => {
+        if (err) console.error(err);
+        setQRCodeUrl(url);
+      });
+    }
+  }, [qrCodeData]);
+
+  // Web3 initialization
+  useEffect(() => {
     const initWeb3 = async () => {
       if (window.ethereum) {
         const web3Instance = new Web3(window.ethereum);
         try {
-          // Use the recommended method instead of window.ethereum.enable()
-          await window.ethereum.request({ method: 'eth_requestAccounts' });
+          await window.ethereum.enable();
           setWeb3(web3Instance);
           const accounts = await web3Instance.eth.getAccounts();
           setAccount(accounts[0]);
-  
+
           const contractInstance = new web3Instance.eth.Contract(contractABI, contractAddress);
           setContract(contractInstance);
         } catch (error) {
@@ -133,6 +158,7 @@ const AddProductForm = () => {
     };
     initWeb3();
   }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!productName) {
