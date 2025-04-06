@@ -21,7 +21,7 @@ const ProductList = ({ products, registrationFee }) => {
   const filteredProducts = useMemo(() => {
     const filtered = products.filter((product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.brand.toLowerCase().includes(searchTerm.toLowerCase())
+      (product.brand && product.brand.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     return filtered.sort((a, b) => {
@@ -34,15 +34,37 @@ const ProductList = ({ products, registrationFee }) => {
     });
   }, [products, searchTerm, sortOption]);
 
-  const downloadQRCode = (index) => {
+  const downloadQRCode = (index, product) => {
     const canvas = document.getElementById(`qr-code-${index}`);
     const pngUrl = canvas.toDataURL('image/png', 1.0);
     const downloadLink = document.createElement('a');
     downloadLink.href = pngUrl;
-    downloadLink.download = `product-${index}-qrcode.png`;
+    downloadLink.download = `${product.name || 'product'}-qrcode.png`;
     document.body.appendChild(downloadLink);
     downloadLink.click();
     document.body.removeChild(downloadLink);
+  };
+
+  // Format date for QR code in the same format as AddProductForm
+  const formatDateTimeForQR = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date)) return "Invalid Date";
+      
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const year = date.getFullYear();
+      
+      let hours = date.getHours();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      
+      return `${month}/${day}/${year}, ${hours}:${minutes} ${ampm}`;
+    } catch (e) {
+      return "Invalid Date";
+    }
   };
 
   return (
@@ -86,55 +108,63 @@ const ProductList = ({ products, registrationFee }) => {
         </div>
       ) : (
         <div className="row">
-          {filteredProducts.map((product, index) => (
-            <div key={index} className="col-md-6 col-lg-4 mb-4">
-              <div className="card" style={cardStyle}>
-                <div className="card-body">
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <h5 className="card-title mb-0" style={cardTitleStyle}>
-                      {product.name}
-                    </h5>
-                    <span className="badge bg-success" style={badgeStyle}>
-                      <FaCheck style={{ marginRight: '4px' }} /> Authentic
-                    </span>
-                  </div>
+          {filteredProducts.map((product, index) => {
+            // Generate QR code data in the same format as AddProductForm
+            const qrCodeData = JSON.stringify({
+              name: product.name,
+              registeredDate: formatDateTimeForQR(product.registeredDateTime),
+              expirationDate: product.expirationTimestamp ? 
+                formatDateTimeForQR(new Date(Number(product.expirationTimestamp) * 1000)) : 
+                "No expiration",
+              expirationTimestamp: product.expirationTimestamp ? Number(product.expirationTimestamp) : 0,
+              contractAddress: product.owner || "",
+              transactionHash: ""  // This isn't available in the product data
+            });
+            
+            return (
+              <div key={index} className="col-md-6 col-lg-4 mb-4">
+                <div className="card" style={cardStyle}>
+                  <div className="card-body">
+                    <div className="d-flex justify-content-between align-items-center mb-3">
+                      <h5 className="card-title mb-0" style={cardTitleStyle}>
+                        {product.name}
+                      </h5>
+                      <span className="badge bg-success" style={badgeStyle}>
+                        <FaCheck style={{ marginRight: '4px' }} /> Authentic
+                      </span>
+                    </div>
 
-                  <div style={cardContentStyle}>
-                    <p><strong>Registered:</strong> {formatDate(product.registeredDateTime)}</p>
-                    <p><FaTag style={{ marginRight: '5px' }} /><strong>Product ID:</strong> {index}</p>
-                  </div>
+                    <div style={cardContentStyle}>
+                      <p><strong>Registered:</strong> {formatDate(product.registeredDateTime)}</p>
+                      <p><FaTag style={{ marginRight: '5px' }} /><strong>Owner:</strong> {product.owner && 
+                        `${product.owner.substring(0, 6)}...${product.owner.substring(product.owner.length - 4)}`}</p>
+                    </div>
 
-                  {/* QR Code */}
-                  <div className="text-center mt-3">
-                    <QRCodeCanvas
-                      id={`qr-code-${index}`}
-                      value={JSON.stringify({
-                        productId: index,
-                        name: product.name,
-                        brand: product.brand,
-                        description: product.description,
-                        registeredDate: formatDate(product.registeredDateTime),
-                        isAuthentic: true,
-                      })}
-                      size={300}
-                      level="H"
-                      includeMargin={true}
-                    />
-                  </div>
+                    {/* QR Code */}
+                    <div className="text-center mt-3">
+                      <QRCodeCanvas
+                        id={`qr-code-${index}`}
+                        value={qrCodeData}
+                        size={300}
+                        level="M"
+                        includeMargin={true}
+                      />
+                    </div>
 
-                  {/* Download Button */}
-                  <div className="text-center mt-2">
-                    <button 
-                      onClick={() => downloadQRCode(index)}
-                      style={downloadButtonStyle}
-                    >
-                      <FaDownload style={{ marginRight: '5px' }} /> Download QR Code
-                    </button>
+                    {/* Download Button */}
+                    <div className="text-center mt-2">
+                      <button 
+                        onClick={() => downloadQRCode(index, product)}
+                        style={downloadButtonStyle}
+                      >
+                        <FaDownload style={{ marginRight: '5px' }} /> Download QR Code
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

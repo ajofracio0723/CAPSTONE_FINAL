@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Header from '../components/Header';
+import Header from '../components/Header2';
 import ProductList from '../components/ProductList';
 import Web3 from 'web3';
 

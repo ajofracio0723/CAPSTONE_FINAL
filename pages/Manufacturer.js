@@ -14,6 +14,7 @@ import Image from "next/image";
 import landingImage from "../public/images/1.png";
 import image2 from "../public/images/2.png";
 import image3 from "../public/images/3.png";
+import image4710 from "../public/images/4710.png"; // Import the image from Home component
 import "bootstrap/dist/css/bootstrap.min.css";
 import MoreContent from "./MoreContent";
 
@@ -134,10 +135,14 @@ const Home2 = () => {
           </div>
         </div>
         <div style={rightContentStyle}>
-          <video autoPlay loop muted style={backgroundVideoStyle}>
-            <source src="/videos/2.mp4" type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
+          <Image 
+            src={image4710} 
+            alt="4710 Blockchain Technology" 
+            style={backgroundImageStyle}
+            width={500}
+            height={500}
+            objectFit="cover"
+          />
           <div style={learnMoreContainerStyle}>
             <button onClick={handleLearnMoreClick} style={learnMoreButtonStyle}>
               Learn More
@@ -256,13 +261,17 @@ const rightContentStyle = {
   flex: "1",
   overflow: "hidden",
   paddingTop: "5rem",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
 };
 
-const backgroundVideoStyle = {
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
+// Added the backgroundImageStyle from Home component
+const backgroundImageStyle = {
   borderRadius: "20px",
+  maxWidth: "100%",
+  height: "auto",
+  marginBottom: "2rem",
 };
 
 const iconContainerStyle = {
